@@ -7,10 +7,14 @@ sentence-transformers>=2.2.2
 numpy>=1.24.0
 
 # --- Procesamiento de Documentos ---
-marker-pdf>=0.2.0              # Procesamiento avanzado de DOCX/PDF
 docx>=0.2.4
 python-docx>=1.1.0             # Respaldo para DOCX
 langchain-text-splitters>=0.0.1
+langchain-community
+langchain-postgres
+langchain-core
+requests
+docx2txt>=0.1.6                # Conversión de DOCX a texto
 # --- Base de Datos Vectorial ---
 psycopg2-binary>=2.9.7         # Cliente PostgreSQL (binary es más fácil de instalar)
 pgvector>=0.2.3                # Extensión vectorial para PostgreSQL

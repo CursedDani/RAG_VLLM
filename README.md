@@ -79,20 +79,26 @@ source .venv/bin/activate
 
 ### 3. Instalar Dependencias
 
-#### Opción A: Instalación Completa (Recomendado)
 ```bash
 pip install -r requirements.txt
 ```
 
-#### Opción B: Instalación Mínima (Sin Marker)
-Si prefieres una instalación más ligera sin `marker-pdf`:
+### 4. Configurar PostgreSQL con pgvector
+
 ```bash
-pip install -r requirements-minimal.txt
+#Windows
+docker run -d   --name postgres   -e POSTGRES_USER=dani   -e POSTGRES_PASSWORD=dani   -e POSTGRES_DB=postgres   -p 5432:5432   ankane
+/pgvector
+
+docker exec -it postgres psql -U dani -d postgres
+
+#Linux
+sudo docker run -d   --name postgres   -e POSTGRES_USER=dani   -e POSTGRES_PASSWORD=dani   -e POSTGRES_DB=postgres   -p 5432:5432   ankane
+/pgvector
+
+sudo docker exec -it postgres psql -U dani -d postgres
 ```
 
-> **Nota**: Con la instalación mínima solo podrás usar `python-docx` para procesar documentos DOCX. Marker proporciona mejor calidad de extracción pero requiere más dependencias.
-
-### 4. Configurar PostgreSQL con pgvector
 ```sql
 -- Crear base de datos
 CREATE DATABASE postgres;
@@ -143,29 +149,9 @@ data/
 
 ### 2. Procesar e Ingestar Documentos
 
-#### Opción A: Con Marker (Recomendado)
+luego de tener los archivos en la ruta necesaria se debe correr el script de ingesta de archivos.
 ```bash
-python scripts/ingest_data_marker.py
-```
-
-#### Opción B: Con python-docx (Alternativa)
-```bash
-python scripts/ingest_data.py
-```
-
-**Salida esperada:**
-```
-Iniciando script de ingesta para archivos DOCX usando Marker...
-Marker importado correctamente.
-Conexión a PostgreSQL establecida.
-Tabla 'documents_security' verificada/creada.
-
-Procesando archivo: data/docx/politica_de_seguridad.docx...
-  Intentando extracción con Marker...
-  Total de 45 fragmentos generados para 'politica_de_seguridad.docx'.
-  Archivo 'politica_de_seguridad.docx' procesado: 45 fragmentos insertados/actualizados.
-
-Proceso de ingestión a PostgreSQL completado.
+python scripts/ingest.py
 ```
 
 ### 3. Ejecutar la Aplicación
@@ -178,24 +164,6 @@ streamlit run app/ui_main.py
 2. Escribe tu pregunta sobre el contenido de los documentos
 3. El sistema realizará búsqueda híbrida y generará una respuesta contextualizada
 
-## 🔧 Configuración Avanzada
-
-### Parámetros de Chunking
-En `scripts/ingest_data_marker.py`:
-```python
-text_splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
-    tokenizer=tokenizer, 
-    chunk_size=768,      # Tamaño del chunk
-    chunk_overlap=75     # Solapamiento entre chunks
-)
-```
-
-### Modelos de Embedding
-Modelos compatibles:
-- `sentence-transformers/all-MiniLM-L6-v2` (384 dim)
-- `nomic-ai/nomic-embed-text-v1.5` (768 dim)
-- Modelos personalizados vía vLLM
-
 ## 📁 Estructura del Proyecto
 
 ```
@@ -207,11 +175,11 @@ rag_vllm/
 │       ├── system_prompt.txt   # Prompt del sistema
 │       └── wifi_expert_prompt.txt # Prompt especializado
 ├── scripts/
-│   ├── ingest_data.py          # Ingesta con python-docx
-│   └── ingest_data_marker.py   # Ingesta con Marker
+│   ├── ingest.py               # Ingesta con python-docx
+│   └── ingest_QA.py            # Ingesta con Marker
 ├── data/
-│   └── docx/                   # Documentos DOCX
-│   └── Tigo_logo.png
+│   ├── docx/                   # Documentos DOCX
+│   ├── Tigo_logo.png
 │   └── Bot_icon.png
 ├── venv/                       # Entorno virtual
 ├── requirements.txt            # Dependencias completas
@@ -221,18 +189,7 @@ rag_vllm/
 └── README.md
 ```
 
-### Documentación Empresarial
-- Políticas de seguridad
-- Procedimientos técnicos
-- Manuales de configuración
-- Guías de troubleshooting
 
-### Caching
-- Streamlit cachea automáticamente:
-  - Documentos de la BD
-  - Índices Lunr
-  - Modelos CrossEncoder
-  - Cliente vLLM
 
 ## 🔍 Troubleshooting
 

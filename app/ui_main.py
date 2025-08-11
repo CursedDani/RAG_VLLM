@@ -146,7 +146,7 @@ if "chat_history" not in st.session_state:
 for role, message in st.session_state.chat_history:
     if role == 'user':
         st.markdown(
-            f"<div style='text-align: right; margin-bottom:8px;'><b>Usuario:</b> {message}</div>",
+            f"<div style='text-align: right; margin-bottom:8px;'><b>Guadaran:</b> {message}</div>",
             unsafe_allow_html=True
         )
     else:
@@ -167,7 +167,7 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
     # Añade la pregunta del usuario al historial y la muestra.
     st.session_state.chat_history.append(("user", user_question))
     st.markdown(
-            f"<div style='text-align: right; margin-bottom:8px;'><b>Usuario:</b> {user_question}</div>",
+            f"<div style='text-align: right; margin-bottom:8px;'><b>Guadaran:</b> {user_question}</div>",
             unsafe_allow_html=True
         )
 
