@@ -130,36 +130,60 @@ DB_CONNECTION_STRING="host=xxx.xxx.xxx.xxx dbname=postgres user=usuario_db passw
 
 ### 6. Crear Estructura de Directorios
 ```bash
-mkdir -p data/docx
+mkdir -p data data/docx data/docs data/qa_pairs
 ```
 
 ## 📚 Uso
 
 ### 1. Preparar Documentos
-Coloca tus archivos DOCX en la carpeta `data/docx/`, añade el logo de tigo y el ícono del bot:
+Coloca tus archivos DOCX en la carpeta `data/docs/`, añade el logo de tigo y el ícono del bot:
 ```
 data/
 ├── Bot_icon.png
 ├── Tigo_logo.png
-└── docx/
+└── docs/
     ├── documento1.docx
     ├── documento2.docx
     └── ...
 ```
 
-### 2. Procesar e Ingestar Documentos
+### 2. Aplicar la limpieza antes de la ingesta
 
-luego de tener los archivos en la ruta necesaria se debe correr el script de ingesta de archivos.
+Luego de tener todos los documentos en la ruta necesaria se corre el script de limpieza.
+
+```bash
+python scripts/docx_cleanup.py
+```
+### 3. Procesar e Ingestar Documentos
+
+Tras tener los documentos limpios y verificar que existan en la carpeta data/docx se aplica la ingesta.
 ```bash
 python scripts/ingest.py
 ```
 
-### 3. Ejecutar la Aplicación
+### 4. (opcional) Ingestar pares pregunta-respuesta
+si se cuenta con pares de pregunta-respuesta se deben subir en un documento docx en la carpeta data/qa_pairs/ con el formato:
+
+"Pregunta: ¿Dónde está la política de seguridad de la información?
+Respuesta: Puedes encontrar la política de seguridad de la información en el siguiente vinculo: https://millicom.sharepoint.com/sites/ep-tigoco/Corporativo/Documents/Forms/AllItems.aspx?id=%2Fsites%2Fep%2Dtigoco%2FCorporativo%2FDocuments%2FPol%C3%ADticas%2FOperaciones%2FMIC%2DPOL%2DIS%2DInformation%20Security%20Policy%2DESP%2Epdf&parent=%2Fsites%2Fep%2Dtigoco%2FCorporativo%2FDocuments%2FPol%C3%ADticas%2FOperaciones 
+-------
+Pregunta: ¿Dónde está la política de seguridad?
+Respuesta: Puedes encontrar la política de seguridad de la información en el siguiente vinculo: https://millicom.sharepoint.com/sites/ep-tigoco/Corporativo/Documents/Forms/AllItems.aspx?id=%2Fsites%2Fep%2Dtigoco%2FCorporativo%2FDocuments%2FPol%C3%ADticas%2FOperaciones%2FMIC%2DPOL%2DIS%2DInformation%20Security%20Policy%2DESP%2Epdf&parent=%2Fsites%2Fep%2Dtigoco%2FCorporativo%2FDocuments%2FPol%C3%ADticas%2FOperaciones 
+-------
+"
+
+Tras tener este documento con el formato de preguntas-respuestas se ejecuta
+
+```bash
+python scripts/ingest_QA.py
+```
+
+### 5. Ejecutar la Aplicación
 ```bash
 streamlit run app/ui_main.py
 ```
 
-### 4. Interactuar con el Sistema
+### 6. Interactuar con el Sistema
 1. Abre tu navegador en `http://localhost:8501`
 2. Escribe tu pregunta sobre el contenido de los documentos
 3. El sistema realizará búsqueda híbrida y generará una respuesta contextualizada
@@ -176,9 +200,12 @@ rag_vllm/
 │       └── wifi_expert_prompt.txt # Prompt especializado
 ├── scripts/
 │   ├── ingest.py               # Ingesta con python-docx
-│   └── ingest_QA.py            # Ingesta con Marker
+│   ├── ingest_QA.py            # Ingesta de pares de preguntas-Respuestas
+│   └── docx_cleanup.py         # Limpieza de documentos para la ingesta
 ├── data/
-│   ├── docx/                   # Documentos DOCX
+│   ├── docx/                   # Documentos DOCX a insertar en la base de datos
+│   ├── docs/                   # Documentos originales, antes de aplicar la limpieza
+│   ├── qa_pairs/               # Documentos(s) con pares de pregunta-respuesta para ingestar
 │   ├── Tigo_logo.png
 │   └── Bot_icon.png
 ├── venv/                       # Entorno virtual
@@ -212,17 +239,6 @@ Error conectando a PostgreSQL
 3. Revisar string de conexión en `.env`
 
 ### Problemas de Instalación
-
-#### Marker Installation Issues
-```python
-# Si Marker falla, el sistema usa python-docx automáticamente
-try:
-    from marker import Marker
-    marker_available = True
-except ImportError:
-    marker_available = False
-    # Fallback a python-docx
-```
 
 #### Dependencias PyTorch/CUDA
 Si tienes problemas con PyTorch en GPU:

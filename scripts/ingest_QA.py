@@ -1,8 +1,8 @@
 import os
 from langchain_community.document_loaders import Docx2txtLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 from langchain_postgres import PGVector
-from langchain_core.embeddings import Embeddings 
+from langchain_core.embeddings import Embeddings
 import requests
 import os
 from dotenv import load_dotenv
@@ -33,27 +33,31 @@ class CustomStaticEmbeddings(Embeddings):
         response.raise_for_status()
         return response.json()["embedding"]
 
-load_dotenv(override=True)
 APP_DIR = os.path.dirname(__file__)
-DOCX_DIR = os.path.join(APP_DIR, "..", "data", "docx")
+QA_DIR = os.path.join(APP_DIR, "..", "data", "qa_pairs")
 DB_STRING = os.environ.get("DB_STRING")
 EMBEDDINGS_URL = os.environ.get("VLLM_EMBED")
 
-
-# 1. Load DOCX files
+# 1. Load DOCX files as raw text and split by delimiter
 all_docs = []
-for fname in os.listdir(DOCX_DIR):
+for fname in os.listdir(QA_DIR):
     if fname.lower().endswith(".docx"):
-        loader = Docx2txtLoader(os.path.join(DOCX_DIR, fname))
-        docs = loader.load()
-        all_docs.extend(docs)
+        loader = Docx2txtLoader(os.path.join(QA_DIR, fname))
+        # loader.load() returns a list of Documents, but we want the raw text
+        raw_text = loader.load()[0].page_content  # Assuming one doc per file
+        qa_chunks = [chunk.strip() for chunk in raw_text.split("-------") if chunk.strip()]
+        for chunk in qa_chunks:
+            all_docs.append(
+                Document(
+                    page_content=chunk,
+                    metadata={"source": fname}
+                )
+            )
 
-print(f"Loaded {len(all_docs)} documents from DOCX files.")
+print(f"Loaded {len(all_docs)} QA pairs from DOCX files.")
 
-# 2. Split into chunks
-splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=250)
-docs_split = splitter.split_documents(all_docs)
-print(f"Split into {len(docs_split)} chunks.")
+# 2. No splitting needed, each chunk is a QA pair
+docs_split = all_docs
 
 # 3. Embeddings
 embeddings = CustomStaticEmbeddings(endpoint_url=EMBEDDINGS_URL)
@@ -68,4 +72,4 @@ vector_store = PGVector.from_existing_index(
 # 5. Add documents
 ids = [f"{doc.metadata.get('source','docx')}-{i}" for i, doc in enumerate(docs_split)]
 vector_store.add_documents(docs_split, ids=ids)
-print(f"Inserted {len(docs_split)} chunks into PGVector.")
+print(f"Inserted {len(docs_split)} QA pairs into PGVector.")
