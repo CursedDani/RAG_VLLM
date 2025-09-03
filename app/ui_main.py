@@ -30,7 +30,7 @@ client = openai.OpenAI(
 APP_DIR = os.path.dirname(__file__)
 PROMPT_DIR = os.path.join(APP_DIR, "prompts")
 SYSTEM_PROMPT_FILE = os.path.join(PROMPT_DIR, "Security.txt")
-BOT_ICON_PATH = os.path.join(APP_DIR, "..", "data", "Bot_icon.png")
+BOT_ICON_PATH = os.path.join(APP_DIR, "..", "data", "Bot_icon.jpg")
 LOGO_PATH = os.path.join(APP_DIR, "..", "data", "Tigo_logo.png")
 # Número de documentos a recuperar para el contexto RAG.
 NUM_DOCS_FOR_CONTEXT = 3
@@ -103,24 +103,35 @@ def load_system_prompt_cached(_prompt_file_path):
 
 # --- Inicialización y Carga de Recursos ---
 st.set_page_config(page_title="Agente InfoSec", layout="centered")
-st.title("Chatbot Corportativo-Seguridad de la información TIGO")
+#st.title("Chatbot Corportativo-Seguridad de la información TIGO")
+st.markdown("""
+<style>
+    /* More specific targeting for chat input */
+    div[data-testid="stChatInput"] > div {
+        background-color: #f0f2f6 !important;
+        color: #00005A !important;
+        border: 1px solid #969696 !important;
+    }
 
+    div[data-testid="stChatInput"] button {
+        background-color: #001EB4 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+    }
+    
+    div[data-testid="stChatInput"] button:hover {
+        background-color: #00005A !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+st.markdown(
+    "<h1 style='text-align: center; color: #00005A;'>Chatbot-Seguridad de la información TIGO</h1>", 
+    unsafe_allow_html=True
+)
 if missing_configs: # Si faltan configuraciones críticas, detiene.
     st.error(f"Error: Faltan configuraciones en .env: {', '.join(missing_configs)}.")
     st.stop()
-
-logo_html = ""
-if os.path.exists(LOGO_PATH):
-    import base64
-    with open(LOGO_PATH, "rb") as f:
-        logo_bytes = f.read()
-        logo_b64 = base64.b64encode(logo_bytes).decode()
-        logo_html = f"""
-        <div style='position:fixed; top:64px; left:28px; z-index:1000;'>
-            <img src='data:image/png;base64,{logo_b64}' width='90'/>
-        </div>
-        """
-    st.markdown(logo_html, unsafe_allow_html=True)
 
 # Carga los recursos principales para la aplicación.
 with st.spinner("Iniciando agente... Por favor, espera."):
@@ -135,7 +146,6 @@ if not VLLM_client or not documents_list_from_db or not lunr_idx:
     st.error("No se pudieron cargar los recursos necesarios. La aplicación no puede continuar.")
     st.stop()
 
-st.success(f"Agente listo.")
 
 # --- Gestión del Historial de Chat ---
 # Usa st.session_state para mantener el historial durante la sesión del usuario.
@@ -146,7 +156,7 @@ if "chat_history" not in st.session_state:
 for role, message in st.session_state.chat_history:
     if role == 'user':
         st.markdown(
-            f"<div style='text-align: right; margin-bottom:8px;'><b>Guadaran:</b> {message}</div>",
+            f"<div style='text-align: right; margin-bottom:8px; color:#00005A;'><b>Guadaran:</b> {message}</div>",
             unsafe_allow_html=True
         )
     else:
@@ -156,8 +166,18 @@ for role, message in st.session_state.chat_history:
             with open(BOT_ICON_PATH, "rb") as f:
                 icon_bytes = f.read()
                 icon_b64 = base64.b64encode(icon_bytes).decode()
-                icon_html = f"<img src='data:image/png;base64,{icon_b64}' width='64' style='vertical-align:middle;margin-right:12px;'/>"
-        st.markdown(
+                icon_html = f"""
+        <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+            <img src='data:image/jpeg;base64,{icon_b64}' 
+                 style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
+                        border: 3px solid #00005A; box-shadow: 0 2px 8px rgba(0,0,90,0.2);
+                        filter: brightness(1.1) contrast(1.1);' />
+            <div style='flex: 1; color: #333;'>
+                <div id='bot-response-{len(st.session_state.chat_history)}' style='line-height: 1.5; font-size: 14px;'></div>
+            </div>
+        </div>
+        """
+            st.markdown(
             f"<div style='text-align: left; margin-bottom:8px;'>{icon_html}<b>Bot:</b> {message}</div>",
             unsafe_allow_html=True
         )
@@ -166,15 +186,41 @@ for role, message in st.session_state.chat_history:
 if user_question := st.chat_input("Escribe tu pregunta..."):
     # Añade la pregunta del usuario al historial y la muestra.
     st.session_state.chat_history.append(("user", user_question))
-    st.markdown(
-            f"<div style='text-align: right; margin-bottom:8px;'><b>Guadaran:</b> {user_question}</div>",
-            unsafe_allow_html=True
-        )
+    #st.markdown(
+    #       f"<div style='text-align: right; margin-bottom:8px; color:#001EB4;'><b>Guadaran:</b> <p style='color:#00005A'>{user_question}</p></div>",
+    #       unsafe_allow_html=True
+    #    )
+    st.markdown(f"""
+            <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+                <div style='flex: 1; color: #333;'>
+                    <div id='bot-response-{len(st.session_state.chat_history)}' style='line-height: 1.5; font-size: 14px;'></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # Placeholder para la respuesta del asistente (para efecto de streaming).
-    assistant_response_placeholder = st.chat_message("assistant", avatar=BOT_ICON_PATH).empty()
-    current_response_text = "" # Acumula la respuesta en streaming.
-    
+    # Instead of using st.chat_message, create custom styled container
+    if os.path.exists(BOT_ICON_PATH):
+        import base64
+        with open(BOT_ICON_PATH, "rb") as f:
+            icon_bytes = f.read()
+            icon_b64 = base64.b64encode(icon_bytes).decode()
+            
+    # Create a custom styled bot response container
+    bot_container = st.container()
+    with bot_container:
+        st.markdown(f"""
+        <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+            <img src='data:image/jpeg;base64,{icon_b64}' 
+                 style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
+                        filter: brightness(1.1) contrast(1.1);' />
+            <div style='flex: 1; color: #333;'>
+                <div id='bot-response-{len(st.session_state.chat_history)}' style='line-height: 1.5; font-size: 14px;'></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Create a placeholder for streaming
+        assistant_response_placeholder = st.empty()
     # Realiza la búsqueda RAG y genera la respuesta.
     with st.spinner("Buscando información y generando respuesta..."):
         try:
@@ -248,7 +294,7 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
                 "frequency_penalty": 0.5,
                 "presence_penalty": 0.3
             }
-            with requests.post(url, json=payload, stream=True, timeout=120) as response:
+            with requests.post(url, json=payload, stream=True, timeout=5) as response:
                 print(response)
                 response.raise_for_status()
                 current_response_text = ""

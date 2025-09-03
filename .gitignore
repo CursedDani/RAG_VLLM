@@ -75,3 +75,5 @@ venv.bak/
 .DS_Store
 Thumbs.db
 data/
+node_modules/
+automation/pptr/images
