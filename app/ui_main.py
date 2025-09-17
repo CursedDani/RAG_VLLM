@@ -3,7 +3,8 @@ import os
 import openai
 from dotenv import load_dotenv
 import requests
-import html  # Add this import at the top of your file
+import html
+from chat_manager import ChatManager
 
 # Importar lógica RAG del módulo local app/rag_logic.py.
 try:
@@ -102,9 +103,13 @@ def load_system_prompt_cached(_prompt_file_path):
         st.warning(f"No se pudo cargar el prompt del sistema desde '{_prompt_file_path}'. Usando prompt por defecto.")
         return "Eres un asistente IA que responde preguntas basándose en un contexto."
 
+# Initialize chat manager
+chat_manager = ChatManager()
+
 # --- Inicialización y Carga de Recursos ---
-st.set_page_config(page_title="Agente InfoSec", layout="centered")
-#st.title("Chatbot Corportativo-Seguridad de la información TIGO")
+st.set_page_config(page_title="Agente InfoSec", layout="wide")  # Changed to wide
+
+# Custom CSS
 st.markdown("""
 <style>
     /* More specific targeting for chat input */
@@ -124,8 +129,32 @@ st.markdown("""
     div[data-testid="stChatInput"] button:hover {
         background-color: #00005A !important;
     }
+    
+    /* Sidebar styles */
+    .sidebar .element-container {
+        margin-bottom: 10px;
+    }
+    
+    .chat-item {
+        padding: 8px 12px;
+        margin: 4px 0;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .chat-item:hover {
+        background-color: #f0f2f6;
+    }
+    
+    .chat-item.active {
+        background-color: #e3f2fd;
+        border-color: #00005A;
+    }
 </style>
 """, unsafe_allow_html=True)
+
 st.markdown(
     "<h1 style='text-align: center; color: #00005A;'>Chatbot-Seguridad de la información TIGO</h1>", 
     unsafe_allow_html=True
@@ -148,10 +177,74 @@ if not VLLM_client or not documents_list_from_db or not lunr_idx:
     st.stop()
 
 
-# --- Gestión del Historial de Chat ---
-# Usa st.session_state para mantener el historial durante la sesión del usuario.
+# --- Sidebar for Chat Management ---
+with st.sidebar:
+    st.header("💬 Chats")
+    
+    # New chat button
+    if st.button("➕ Nuevo Chat", use_container_width=True):
+        new_chat_id = chat_manager.create_new_chat()
+        st.session_state.current_chat_id = new_chat_id
+        st.session_state.chat_history = []
+        st.rerun()
+    
+    # Load all chats
+    all_chats = chat_manager.get_all_chats()
+    
+    # Initialize current chat if not exists
+    if "current_chat_id" not in st.session_state:
+        if all_chats:
+            st.session_state.current_chat_id = list(all_chats.keys())[0]
+        else:
+            st.session_state.current_chat_id = chat_manager.create_new_chat()
+    
+    # Display chat list
+    if all_chats:
+        st.subheader("Chats Disponibles")
+        for chat_id, chat_info in all_chats.items():
+            col1, col2 = st.columns([4, 1])
+            
+            with col1:
+                is_active = chat_id == st.session_state.current_chat_id
+                if st.button(
+                    f"{'🟦' if is_active else '⬜'} {chat_info['title'][:30]}...",
+                    key=f"chat_{chat_id}",
+                    use_container_width=True,
+                    type="primary" if is_active else "secondary"
+                ):
+                    st.session_state.current_chat_id = chat_id
+                    st.session_state.chat_history = chat_manager.get_chat_history(chat_id)
+                    st.rerun()
+            
+            with col2:
+                if st.button("🗑️", key=f"delete_{chat_id}", help="Eliminar chat"):
+                    chat_manager.delete_chat(chat_id)
+                    if chat_id == st.session_state.current_chat_id:
+                        remaining_chats = chat_manager.get_all_chats()
+                        if remaining_chats:
+                            st.session_state.current_chat_id = list(remaining_chats.keys())[0]
+                            st.session_state.chat_history = chat_manager.get_chat_history(st.session_state.current_chat_id)
+                        else:
+                            new_chat_id = chat_manager.create_new_chat()
+                            st.session_state.current_chat_id = new_chat_id
+                            st.session_state.chat_history = []
+                    st.rerun()
+            
+            # Show chat info
+            st.caption(f"📅 {chat_info.get('created_at', '')[:16]} | 💬 {chat_info.get('message_count', 0)} mensajes")
+
+# --- Main Chat Area ---
+# Load current chat history if not in session state
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = [] 
+    if "current_chat_id" in st.session_state:
+        st.session_state.chat_history = chat_manager.get_chat_history(st.session_state.current_chat_id)
+    else:
+        st.session_state.chat_history = []
+
+# Display current chat title
+if "current_chat_id" in st.session_state:
+    current_chat_info = chat_manager.load_chats_index().get(st.session_state.current_chat_id, {})
+    st.text(f"📝 {current_chat_info.get('title', 'Chat Actual')}")
 
 # --- Interfaz de Chat Principal ---
 for role, message in st.session_state.chat_history:
@@ -340,4 +433,4 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
 # venv\Scripts\activate   
 # pip install -r requirements.txt
 # streamlit run app/ui_main.py 
-# python scripts/ingest_data.py
+# python scripts/ingest_data.py 
