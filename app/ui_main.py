@@ -3,6 +3,7 @@ import os
 import openai
 from dotenv import load_dotenv
 import requests
+import html  # Add this import at the top of your file
 
 # Importar lógica RAG del módulo local app/rag_logic.py.
 try:
@@ -155,10 +156,15 @@ if "chat_history" not in st.session_state:
 # --- Interfaz de Chat Principal ---
 for role, message in st.session_state.chat_history:
     if role == 'user':
-        st.markdown(
-            f"<div style='text-align: right; margin-bottom:8px; color:#00005A;'><b>Guadaran:</b> {message}</div>",
-            unsafe_allow_html=True
-        )
+        st.markdown(f"""
+                <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #00005A; justify-content: flex-end;'>
+                    <div style='max-width: 70%; text-align: right;'>
+                        <div style='margin-bottom: 4px; color: #001EB4;'><b>Guadaran:</b></div>
+                        <div style='color: #00005A; background-color: #e3f2fd; padding: 8px 12px; border-radius: 8px; display: inline-block;'>{message}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
     else:
         icon_html = ""
         if os.path.exists(BOT_ICON_PATH):
@@ -172,28 +178,30 @@ for role, message in st.session_state.chat_history:
                  style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
                         border: 3px solid #00005A; box-shadow: 0 2px 8px rgba(0,0,90,0.2);
                         filter: brightness(1.1) contrast(1.1);' />
-            <div style='flex: 1; color: #333;'>
-                <div id='bot-response-{len(st.session_state.chat_history)}' style='line-height: 1.5; font-size: 14px;'></div>
+            <div style='flex: 1; color: #00005A;'>
+                <div id='bot-response-{len(st.session_state.chat_history)}' style='color: #00005A;'>Hola</div>
             </div>
         </div>
         """
-            st.markdown(
-            f"<div style='text-align: left; margin-bottom:8px;'>{icon_html}<b>Bot:</b> {message}</div>",
-            unsafe_allow_html=True
-        )
-
+            st.markdown(f"""
+            <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+                <img src='data:image/jpeg;base64,{icon_b64}' 
+                    style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
+                            filter: brightness(1.1) contrast(1.1);' />
+                <div style='flex: 1; color: #333;'>
+                    <div id='bot-response-{len(st.session_state.chat_history)}' style='color: #00005A;'>{message}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 # Campo de entrada para la pregunta del usuario.
 if user_question := st.chat_input("Escribe tu pregunta..."):
     # Añade la pregunta del usuario al historial y la muestra.
     st.session_state.chat_history.append(("user", user_question))
-    #st.markdown(
-    #       f"<div style='text-align: right; margin-bottom:8px; color:#001EB4;'><b>Guadaran:</b> <p style='color:#00005A'>{user_question}</p></div>",
-    #       unsafe_allow_html=True
-    #    )
     st.markdown(f"""
-            <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
-                <div style='flex: 1; color: #333;'>
-                    <div id='bot-response-{len(st.session_state.chat_history)}' style='line-height: 1.5; font-size: 14px;'></div>
+            <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-right: 4px solid #00005A; justify-content: flex-end;'>
+                <div style='max-width: 70%; text-align: right;'>
+                    <span style='color: #001EB4; margin-right: 8px;'><b>Guadaran:</b></span>
+                    <span style='color: #00005A;'>{user_question}</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -205,22 +213,9 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
             icon_bytes = f.read()
             icon_b64 = base64.b64encode(icon_bytes).decode()
             
-    # Create a custom styled bot response container
-    bot_container = st.container()
-    with bot_container:
-        st.markdown(f"""
-        <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
-            <img src='data:image/jpeg;base64,{icon_b64}' 
-                 style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
-                        filter: brightness(1.1) contrast(1.1);' />
-            <div style='flex: 1; color: #333;'>
-                <div id='bot-response-{len(st.session_state.chat_history)}' style='line-height: 1.5; font-size: 14px;'></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Create a placeholder for streaming
-        assistant_response_placeholder = st.empty()
+    # Create a placeholder for the entire bot response container
+    bot_response_placeholder = st.empty()
+    
     # Realiza la búsqueda RAG y genera la respuesta.
     with st.spinner("Buscando información y generando respuesta..."):
         try:
@@ -262,24 +257,7 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
         if len(messages_for_llm) > (MAX_CONVERSATION_HISTORY_FOR_LLM + 1):
             messages_for_llm = [messages_for_llm[0]] + messages_for_llm[-(MAX_CONVERSATION_HISTORY_FOR_LLM):]
 
-        with st.expander("Ver Documentos y Contexto Enviado al LLM", expanded=False):
-            st.markdown("---")
-            # Itera sobre la lista 'retrieved_docs' que contiene los documentos recuperados.
-            for i, doc in enumerate(retrieved_docs):
-                # Muestra el ID del documento para una fácil referencia.
-                st.markdown(f"**Documento {i+1} (ID: {doc.get('id', 'N/A')})**")
-                # Muestra los primeros 300 caracteres del contenido del documento.
-                st.caption(doc.get('text', 'Texto no disponible') + "...")
-           
-            st.markdown("---")
-           
-            # Muestra el prompt completo que se envía al rol 'user' del LLM.
-            # Usamos 'messages_for_llm' que es la variable string que contiene la pregunta y el contexto.
-            st.text_area(
-                "Prompt Final Enviado al LLM (en el mensaje del usuario):",
-                value=messages_for_llm, # 'value' debe ser un string
-                height=250,
-                key=f"context_debug_{len(st.session_state.chat_history)}" )
+
 
         # Llama al LLM de vLLM con el historial y contexto usando requests
         try:
@@ -287,7 +265,7 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
             payload = {
                 "model": VLLM_MODEL_GENERATION,
                 "messages": messages_for_llm,
-                "temperature": 0.2,
+                "temperature": 0.4,
                 "stream": True,
                 "max_tokens": 800,
                 "top_p": 0.9,
@@ -310,14 +288,51 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
                     content = delta.get("content", "")
                     if content:
                         current_response_text += content
-                        assistant_response_placeholder.markdown(current_response_text + "▌")
-                assistant_response_placeholder.markdown(current_response_text)
+                        # Escape HTML content to prevent invalid tag errors
+                        escaped_text = html.escape(current_response_text)
+                        # Update the styled container with streaming text
+                        bot_response_placeholder.markdown(f"""
+                        <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+                            <img src='data:image/jpeg;base64,{icon_b64}' 
+                                 style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
+                                        border: 3px solid #00005A; box-shadow: 0 2px 8px rgba(0,0,90,0.2);
+                                        filter: brightness(1.1) contrast(1.1);' />
+                            <div style='flex: 1; color: #333;'>
+                                <div style='color: #00005A; line-height: 1.6;'>{escaped_text}▌</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # Final update without cursor
+                escaped_final_text = html.escape(current_response_text)
+                bot_response_placeholder.markdown(f"""
+                <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+                    <img src='data:image/jpeg;base64,{icon_b64}' 
+                         style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
+                                border: 3px solid #00005A; box-shadow: 0 2px 8px rgba(0,0,90,0.2);
+                                filter: brightness(1.1) contrast(1.1);' />
+                    <div style='flex: 1; color: #333;'>
+                        <div style='color: #00005A; line-height: 1.6;'>{escaped_final_text}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
                 st.session_state.chat_history.append(("assistant", current_response_text))
         except Exception as e:
             error_msg = f"Error al generar respuesta con LLM: {e}"
             st.error(error_msg)
             current_response_text = "Lo siento, tuve un problema al generar la respuesta."
-            assistant_response_placeholder.markdown(current_response_text)
+            escaped_error_text = html.escape(current_response_text)
+            bot_response_placeholder.markdown(f"""
+            <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+                <img src='data:image/jpeg;base64,{icon_b64}' 
+                     style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
+                            border: 3px solid #00005A; box-shadow: 0 2px 8px rgba(0,0,90,0.2);
+                            filter: brightness(1.1) contrast(1.1);' />
+                <div style='flex: 1; color: #333;'>
+                    <div style='color: #00005A; line-height: 1.6;'>{escaped_error_text}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
             st.session_state.chat_history.append(("assistant", current_response_text))
 
 ##Comandos para ejecutar la aplicación:
