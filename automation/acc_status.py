@@ -9,7 +9,7 @@ BASE_DN = 'dc=epmtelco,dc=com,dc=co'
  
 # Usuario y contraseña explícitos para autenticación NTLM
 USER_DOMAIN = 'EPMTELCO\\rinforma'     # Cambia por tu usuario en formato DOMINIO\usuario
-PASSWORD = 'ChaBot2025/*-+'           # Cambia por la contraseña del usuario
+PASSWORD = 'ChatBot2025/*-+'           # Cambia por la contraseña del usuario
  
 # Solicita el login a consultar
 login = input("Ingrese el login del usuario a consultar (sAMAccountName): ").strip()
@@ -91,13 +91,10 @@ try:
 
     filtro = f"(sAMAccountName={login})"
     atributos = [
-        'sAMAccountName',
         'displayName',
         'employeeID',
         'userAccountControl',
-        'lastLogonTimestamp',
         'accountExpires',
-        'msDS-UserPasswordExpiryTimeComputed'
     ]
  
     conn.search(search_base=BASE_DN, search_filter=filtro, attributes=atributos)
@@ -109,13 +106,10 @@ try:
     usuario = conn.entries[0]
 
     datos = {
-        "Login": usuario.sAMAccountName.value or "No definido",
         "Nombre completo": usuario.displayName.value or "No definido",
         "Identificación": usuario.employeeID.value or "No definido",
         "Estado de la cuenta": estado_cuenta(usuario.userAccountControl.value),
-        "Último logueo": convertir_filedate_a_fecha(usuario.lastLogonTimestamp.value) if 'lastLogonTimestamp' in usuario else "No disponible",
         "Expiración de la cuenta": convertir_filedate_a_fecha(usuario.accountExpires),
-        "Expiración de la contraseña": convertir_filedate_a_fecha(usuario['msDS-UserPasswordExpiryTimeComputed']) if 'msDS-UserPasswordExpiryTimeComputed' in usuario else "No disponible"
     }
  
     mostrar_ventana(datos, login)

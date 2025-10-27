@@ -51,11 +51,8 @@ class ChangeOrderAutomation {
 
         // Test 2: Check internal network
         try {
-            console.log('Test 2: Accessing internal IP...');
             const response = await this.page.goto('http://10.100.85.31', { timeout: 15000 });
-            console.log('✓ Internal server response status:', response.status());
         } catch (e) {
-            console.log('✗ Internal server failed:', e.message);
         }
 
         const response = await this.page.goto(this.baseUrl, {
@@ -82,7 +79,7 @@ class ChangeOrderAutomation {
             return document.readyState === 'complete' &&
                 window.frames &&
                 window.frames.length > 0;
-        }, { timeout: 30000 });
+        }, { timeout: 60000 });
 
         // Additional wait for frame content to load
         let attempts = 0;
@@ -117,60 +114,9 @@ class ChangeOrderAutomation {
         console.log('Searching for target frame...');
 
         const frames = this.page.frames();
-        console.log(`Found ${frames.length} frames total`);
-
-        // Search all frames for the new form elements
-        for (let i = 0; i < frames.length; i++) {
-            const frame = frames[i];
-            const frameUrl = frame.url();
-            console.log(`Checking frame ${i}: ${frameUrl}`);
-
-            try {
-                // Try to find the ticket type selector and search key input
-                const hasSelector = await frame.$('#ticket_type');
-                const hasInput = await frame.$('input[name="searchKey"]');
-                if (hasSelector && hasInput) {
-                    console.log(`Found target frame with new form elements (frame ${i})`);
-                    this.targetFrame = frame;
-                    return frame;
-                }
-            } catch (e) {
-                console.log(`Could not access frame ${i}: ${e.message}`);
-            }
-        }
-
-        // Fallback: search for old elements in case UI hasn't changed completely
-        for (let i = 0; i < frames.length; i++) {
-            const frame = frames[i];
-            try {
-                const hasInput = await frame.$('#chgnum');
-                if (hasInput) {
-                    console.log(`Found target frame with legacy change order input (frame ${i})`);
-                    this.targetFrame = frame;
-                    return frame;
-                }
-            } catch (e) {
-                console.log(`Could not access frame ${i}: ${e.message}`);
-            }
-        }
-
-        // If direct selector search failed, try content search
-        for (let i = 0; i < frames.length; i++) {
-            const frame = frames[i];
-            try {
-                const content = await frame.content();
-                if (content.includes('ticket_type') || content.includes('searchKey') ||
-                    (content.includes('chgnum') && content.includes('Change Order Number'))) {
-                    console.log(`Found target frame by content search (frame ${i})`);
-                    this.targetFrame = frame;
-                    return frame;
-                }
-            } catch (e) {
-                console.log(`Could not access frame ${i} content: ${e.message}`);
-            }
-        }
-
-        throw new Error('Target frame with Change Order form not found');
+        const frame = frames[1];
+        this.targetFrame = frame;
+        return frame;
     }
 
     async waitForFormReady() {
@@ -205,25 +151,8 @@ class ChangeOrderAutomation {
             return;
 
         } catch (e) {
-            console.log('New UI elements not found, trying legacy elements...');
+            console.log('New UI elements not found');
         }
-
-        // Fallback to old UI elements
-        await this.targetFrame.waitForSelector('#chgnum', {
-            timeout: 15000,
-            visible: true
-        });
-
-        console.log('Legacy Change Order input field is ready');
-
-        // Also wait for form to be fully loaded
-        await this.targetFrame.waitForFunction(() => {
-            const input = document.querySelector('#chgnum');
-            const form = document.querySelector('form[name="frmSearchChg"]');
-            return input && form && document.readyState === 'complete';
-        }, { timeout: 15000 });
-
-        console.log('Legacy form is fully ready');
     }
 
     async selectChangeOrderType() {
@@ -235,10 +164,6 @@ class ChangeOrderAutomation {
 
         // Check if the new UI selector exists
         const selector = await this.targetFrame.$('#ticket_type');
-        if (!selector) {
-            console.log('Ticket type selector not found, assuming legacy UI');
-            return true; // Skip this step for legacy UI
-        }
 
         // Select "Change Order" option (value="go_chg")
         await this.targetFrame.select('#ticket_type', 'go_chg');
@@ -269,16 +194,10 @@ class ChangeOrderAutomation {
 
         // Try new UI input field first
         let inputField = await this.targetFrame.$('input[name="searchKey"]');
+
         let inputSelector = 'input[name="searchKey"]';
-
         if (!inputField) {
-            // Fallback to legacy UI
-            inputField = await this.targetFrame.$('#chgnum');
-            inputSelector = '#chgnum';
-        }
-
-        if (!inputField) {
-            throw new Error('Change Order input field not found (tried both new and legacy selectors)');
+            throw new Error('Change Order input field not found');
         }
 
         console.log(`Using input field selector: ${inputSelector}`);
@@ -307,30 +226,7 @@ class ChangeOrderAutomation {
     async clickGoButton() {
         console.log('Looking for Go button...');
 
-        // Try multiple selectors for the Go button (including new UI)
-        const buttonSelectors = [
-            'a#imgBtn0[title*="Popup detail form for specified item"]', // New UI selector
-            'a[id="imgBtn0"]', // Alternative new UI selector
-            'a.button[onclick*="ImgBtnExecute"]', // New UI pattern
-            'a[title*="Go display specified change order"]',
-            'input[type="button"][title*="Go"]',
-            'a[title*="Go"]',
-            'input[value*="Go"]',
-            'button[title*="Go"]'
-        ];
-
         let goButton = null;
-        for (const selector of buttonSelectors) {
-            try {
-                goButton = await this.targetFrame.$(selector);
-                if (goButton) {
-                    console.log(`Found Go button with selector: ${selector}`);
-                    break;
-                }
-            } catch (e) {
-                // Continue to next selector
-            }
-        }
 
         if (!goButton) {
             // Try to find by text content or specific attributes
@@ -377,37 +273,12 @@ class ChangeOrderAutomation {
             console.log('Popup window detected');
             this.popupPage = result.popup;
 
-            // Wait for popup to load with more robust approach
             try {
-                await this.popupPage.waitForLoadState?.('domcontentloaded').catch(() => { });
-                // Alternative for Puppeteer
                 await this.popupPage.waitForFunction(() => document.readyState !== 'loading', { timeout: 10000 }).catch(() => { });
                 console.log('Popup page loaded successfully');
             } catch (e) {
                 console.log('Popup loading warning:', e.message);
                 // Continue anyway as the popup might still be usable
-            }
-        } else {
-            console.log('No popup detected, checking for new frames or modal content...');
-            // Wait a bit for potential frame changes
-            await new Promise(resolve => setTimeout(resolve, 3000)); // Increased wait time
-
-            // Check if new frames appeared
-            const currentFrames = this.page.frames();
-            console.log(`Now have ${currentFrames.length} frames`);
-
-            // Look for modal or detail content in existing frames
-            for (const frame of currentFrames) {
-                try {
-                    const hasDetailTable = await frame.$('#dtltbl0');
-                    if (hasDetailTable) {
-                        console.log('Found detail table in frame, using frame as popup source');
-                        this.popupPage = frame;
-                        break;
-                    }
-                } catch (e) {
-                    // Frame not accessible, continue
-                }
             }
         }
 
@@ -462,18 +333,6 @@ class ChangeOrderAutomation {
             }
         }
 
-        if (!tableFound) {
-            // Try to find any table as fallback
-            console.log('Primary table not found, looking for any table...');
-            const anyTable = await this.popupPage.$('table');
-            if (!anyTable) {
-                // Last resort: dump all frame contents to see what we have
-                console.log('No table found, dumping popup frame contents for debugging...');
-                await this.dumpPopupFrameContents();
-                throw new Error('No table found in popup window');
-            }
-            console.log('Found alternative table, proceeding with extraction...');
-        }
 
         // Extract data from the table
         const tableData = await this.popupPage.evaluate(() => {
@@ -598,8 +457,6 @@ class ChangeOrderAutomation {
             order_description: tableData.order_description || ''
         };
 
-        console.log('📋 Extracted Change Order Data (filtered):');
-        console.log(JSON.stringify(filteredData, null, 2));
 
         // Now extract workflow tasks data
         const workflowData = await this.extractWorkflowTasks();
@@ -611,160 +468,11 @@ class ChangeOrderAutomation {
     }
 
     async debugPopupContent() {
-        try {
-            // Get basic info about the popup
-            const title = await this.popupPage.title();
-            const url = await this.popupPage.url();
+        // Check for frames in the popup
+        const frames = this.popupPage.frames();
+        this.popupPage = frames[4];
+        return;
 
-            console.log(`Popup title: "${title}"`);
-            console.log(`Popup URL: "${url}"`);
-
-            // Check for frames in the popup
-            const frames = this.popupPage.frames();
-            console.log(`Popup has ${frames.length} frames`);
-
-            // Check each frame in the popup for tables
-            for (let i = 0; i < frames.length; i++) {
-                const frame = frames[i];
-                try {
-                    const frameUrl = frame.url();
-                    console.log(`Popup frame ${i}: ${frameUrl}`);
-
-                    // Look for tables in this frame
-                    const frameTableInfo = await frame.evaluate(() => {
-                        const tables = document.querySelectorAll('table');
-                        return Array.from(tables).map((table, index) => ({
-                            index: index,
-                            id: table.id || 'no-id',
-                            className: table.className || 'no-class',
-                            rowCount: table.querySelectorAll('tr').length
-                        }));
-                    });
-
-                    if (frameTableInfo.length > 0) {
-                        console.log(`Frame ${i} tables:`, JSON.stringify(frameTableInfo, null, 2));
-
-                        // If we find a table with the right ID, note it
-                        const hasDetailTable = frameTableInfo.some(t => t.id === 'dtltbl0');
-                        if (hasDetailTable) {
-                            console.log(`🎯 Found detail table in popup frame ${i}!`);
-                            // Set this frame as our popup page for extraction
-                            this.popupPage = frame;
-                            return;
-                        }
-                    }
-                } catch (e) {
-                    console.log(`Could not access popup frame ${i}: ${e.message}`);
-                }
-            }
-
-            // If no specific table found, get HTML snippet from main popup
-            const htmlSnippet = await this.popupPage.evaluate(() => {
-                const body = document.body;
-                if (!body) return 'No body element found';
-
-                // Get first 1000 characters of HTML
-                return body.innerHTML.substring(0, 1000);
-            });
-
-            console.log('Popup HTML snippet:', htmlSnippet);
-
-        } catch (e) {
-            console.log('Error debugging popup content:', e.message);
-        }
-    }
-
-    async recheckPopupFrames() {
-        try {
-            const frames = this.popupPage.frames();
-            console.log(`Rechecking ${frames.length} popup frames for detail table...`);
-
-            for (let i = 0; i < frames.length; i++) {
-                const frame = frames[i];
-                try {
-                    const frameUrl = frame.url();
-
-                    // Look for the detail table
-                    const hasDetailTable = await frame.$('#dtltbl0');
-                    if (hasDetailTable) {
-                        console.log(`🎯 Found detail table in popup frame ${i}: ${frameUrl}`);
-                        this.popupPage = frame;
-                        return true;
-                    }
-
-                    // Also check for any table with "detailro" class
-                    const hasDetailroTable = await frame.$('table.detailro');
-                    if (hasDetailroTable) {
-                        console.log(`📋 Found detailro table in popup frame ${i}: ${frameUrl}`);
-                        this.popupPage = frame;
-                        return true;
-                    }
-
-                } catch (e) {
-                    console.log(`Could not access popup frame ${i}: ${e.message}`);
-                }
-            }
-
-            console.log('No detail table found in any popup frame');
-            return false;
-        } catch (e) {
-            console.log('Error rechecking popup frames:', e.message);
-            return false;
-        }
-    }
-
-    async dumpPopupFrameContents() {
-        try {
-            console.log('🔍 Dumping popup frame contents for debugging...');
-
-            // Get the original popup page frames
-            const originalPopup = this.popupPage.frames ? this.popupPage : this.page; // fallback if popupPage is a frame
-            const frames = originalPopup.frames ? originalPopup.frames() : [this.popupPage];
-
-            console.log(`Checking ${frames.length} frames for content`);
-
-            for (let i = 0; i < frames.length; i++) {
-                const frame = frames[i];
-                try {
-                    const frameUrl = frame.url();
-                    console.log(`\n--- Frame ${i}: ${frameUrl} ---`);
-
-                    // Get frame content
-                    const content = await frame.content();
-                    if (content && content.length > 100) {
-                        // Look for specific keywords in the content
-                        const hasChangeOrder = content.includes('21191668') || content.includes('Change Order');
-                        const hasTable = content.includes('<table');
-                        const hasDetailTable = content.includes('dtltbl0');
-                        const hasRequester = content.includes('Requester');
-
-                        console.log(`Frame ${i} analysis:`);
-                        console.log(`  - Has Change Order: ${hasChangeOrder}`);
-                        console.log(`  - Has Table: ${hasTable}`);
-                        console.log(`  - Has Detail Table: ${hasDetailTable}`);
-                        console.log(`  - Has Requester: ${hasRequester}`);
-
-                        if (hasChangeOrder || hasDetailTable || hasRequester) {
-                            console.log(`  - Content preview (first 500 chars):`);
-                            console.log(content.substring(0, 500));
-
-                            // If this looks promising, try to extract from it
-                            if (hasDetailTable || hasRequester) {
-                                console.log(`🎯 This frame looks promising, setting as popup page for extraction`);
-                                this.popupPage = frame;
-                                return;
-                            }
-                        }
-                    } else {
-                        console.log(`Frame ${i} is empty or has minimal content`);
-                    }
-                } catch (e) {
-                    console.log(`Could not access frame ${i}: ${e.message}`);
-                }
-            }
-        } catch (e) {
-            console.log('Error dumping popup frame contents:', e.message);
-        }
     }
 
     async extractWorkflowTasks() {
@@ -796,14 +504,6 @@ class ChangeOrderAutomation {
 
             // Try to find workflow-related tables
             const workflowTableData = await this.popupPage.evaluate(() => {
-                // First, let's debug what tables are available
-                const allTables = document.querySelectorAll('table');
-                console.log(`Found ${allTables.length} tables in popup`);
-
-                for (let i = 0; i < allTables.length; i++) {
-                    const table = allTables[i];
-                    console.log(`Table ${i}: id="${table.id}", class="${table.className}"`);
-                }
 
                 // Look for the specific workflow tasks table: #tbl901
                 let workflowTable = document.querySelector('#tbl901');
@@ -926,7 +626,6 @@ class ChangeOrderAutomation {
 
             if (workflowTableData && !workflowTableData.error) {
                 console.log('📋 Extracted Workflow Tasks Data:');
-                console.log(JSON.stringify(workflowTableData, null, 2));
                 return workflowTableData;
             } else {
                 console.log('Could not extract workflow tasks data:', workflowTableData?.error || 'Unknown error');
@@ -939,211 +638,7 @@ class ChangeOrderAutomation {
         }
     }
 
-    async tryExtractFromFrames() {
-        console.log('Trying to extract data from frames as fallback...');
-
-        const frames = this.page.frames();
-        console.log(`Checking ${frames.length} frames for detail table`);
-
-        for (let i = 0; i < frames.length; i++) {
-            const frame = frames[i];
-            try {
-                console.log(`Checking frame ${i}: ${frame.url()}`);
-
-                // Look for the detail table
-                const hasTable = await frame.$('#dtltbl0');
-                if (hasTable) {
-                    console.log(`Found detail table in frame ${i}`);
-
-                    // Extract data using the same logic as popup
-                    const tableData = await frame.evaluate(() => {
-                        const table = document.querySelector('#dtltbl0');
-                        if (!table) return null;
-
-                        const data = {};
-
-                        // Get all rows
-                        const rows = table.querySelectorAll('tr');
-
-                        // Process rows in pairs (header row + data row)
-                        for (let i = 0; i < rows.length; i += 2) {
-                            const headerRow = rows[i];
-                            const dataRow = rows[i + 1];
-
-                            if (!headerRow || !dataRow) continue;
-
-                            // Get header cells and data cells
-                            const headers = headerRow.querySelectorAll('th');
-                            const dataCells = dataRow.querySelectorAll('td');
-
-                            // Map headers to data
-                            for (let j = 0; j < headers.length && j < dataCells.length; j++) {
-                                const headerText = headers[j].textContent.trim().replace(/&nbsp;/g, '').replace(/\s+/g, ' ');
-                                const dataCell = dataCells[j];
-
-                                let dataText = '';
-
-                                // Check if the cell contains a link with span
-                                const linkSpan = dataCell.querySelector('a span.lookup1em');
-                                if (linkSpan) {
-                                    dataText = linkSpan.textContent.trim();
-                                } else {
-                                    // Get text content, handling &nbsp; and multiple spaces
-                                    dataText = dataCell.textContent.trim().replace(/&nbsp;/g, '').replace(/\s+/g, ' ');
-                                }
-
-                                // Clean up header text by removing labels and extra characters
-                                let cleanHeader = headerText.replace(/&nbsp;/g, '').trim();
-
-                                // Map only the specific fields we need
-                                if (cleanHeader.includes('Requester')) {
-                                    data.requester = dataText;
-                                } else if (cleanHeader.includes('Affected End User')) {
-                                    data.affected_end_user = dataText;
-                                } else if (cleanHeader.includes('Category')) {
-                                    data.category = dataText;
-                                } else if (cleanHeader.includes('Status')) {
-                                    data.status = dataText;
-                                }
-                            }
-                        }
-
-                        return data;
-                    });
-
-                    if (tableData && Object.keys(tableData).length > 0) {
-                        // Try to get Order Description from this frame too
-                        try {
-                            const orderDescription = await frame.evaluate(() => {
-                                const descSelectors = [
-                                    'textarea[name*="description"]',
-                                    'textarea[id*="description"]',
-                                    'td[pdmqa="description"]',
-                                    'span[pdmqa="description"]'
-                                ];
-
-                                for (const selector of descSelectors) {
-                                    const element = document.querySelector(selector);
-                                    if (element) {
-                                        return element.textContent || element.value || '';
-                                    }
-                                }
-                                return null;
-                            });
-
-                            if (orderDescription && orderDescription.trim()) {
-                                tableData.order_description = orderDescription.trim();
-                            }
-                        } catch (e) {
-                            console.log('Could not extract order description from frame:', e.message);
-                        }
-
-                        // Filter to only return the fields we need
-                        const filteredData = {
-                            requester: tableData.requester || '',
-                            affected_end_user: tableData.affected_end_user || '',
-                            category: tableData.category || '',
-                            status: tableData.status || '',
-                            order_description: tableData.order_description || ''
-                        };
-
-                        console.log('📋 Extracted Change Order Data from frame (filtered):');
-                        console.log(JSON.stringify(filteredData, null, 2));
-
-                        // Try to extract workflow tasks from this frame too
-                        this.popupPage = frame; // Set this frame as popup page for workflow extraction
-                        const workflowData = await this.extractWorkflowTasks();
-
-                        return {
-                            changeOrderData: filteredData,
-                            workflowTasks: workflowData?.tasks || workflowData || []
-                        };
-                    }
-                }
-            } catch (e) {
-                console.log(`Could not access frame ${i}: ${e.message}`);
-            }
-        }
-
-        console.log('No detail table found in any frame');
-        return null;
-    }
-
-    async takeScreenshot(filename) {
-        const fullPath = path.join('images', filename);
-        await this.page.screenshot({
-            path: fullPath,
-            fullPage: true
-        });
-        console.log(`Screenshot saved: ${fullPath}`);
-    }
-
-    async extractFormData() {
-        if (!this.targetFrame) {
-            throw new Error('Target frame not available');
-        }
-
-        try {
-            const formData = await this.targetFrame.evaluate(() => {
-                const data = {};
-
-                // Check for new UI elements
-                const ticketTypeSelect = document.querySelector('#ticket_type');
-                if (ticketTypeSelect) {
-                    data.ticket_type = {
-                        type: 'select',
-                        name: ticketTypeSelect.name,
-                        id: ticketTypeSelect.id,
-                        title: ticketTypeSelect.title,
-                        value: ticketTypeSelect.value,
-                        selectedText: ticketTypeSelect.options[ticketTypeSelect.selectedIndex]?.text
-                    };
-                }
-
-                const searchKeyInput = document.querySelector('input[name="searchKey"]');
-                if (searchKeyInput) {
-                    data.searchKey = {
-                        type: searchKeyInput.type,
-                        name: searchKeyInput.name,
-                        id: searchKeyInput.id,
-                        title: searchKeyInput.title,
-                        value: searchKeyInput.value
-                    };
-                }
-
-                // Check for legacy UI elements
-                const form = document.querySelector('form[name="frmSearchChg"]');
-                if (form) {
-                    const inputs = form.querySelectorAll('input');
-                    inputs.forEach(input => {
-                        if (input.type !== 'hidden') {
-                            data[input.name || input.id] = {
-                                type: input.type,
-                                name: input.name,
-                                id: input.id,
-                                title: input.title,
-                                value: input.value
-                            };
-                        }
-                    });
-                }
-
-                return data;
-            });
-
-            console.log('Form data extracted:', JSON.stringify(formData, null, 2));
-            return formData;
-        } catch (e) {
-            console.log('Could not extract form data:', e.message);
-            return null;
-        }
-    }
-
     async close() {
-        if (this.popupPage) {
-            await this.popupPage.close();
-            console.log('Popup page closed');
-        }
         if (this.browser) {
             await this.browser.close();
             console.log('Browser closed');
@@ -1182,10 +677,10 @@ class ChangeOrderAutomation {
         await automation.selectChangeOrderType();
 
         // Extract form data for debugging
-        await automation.extractFormData();
 
         // Enter the specific change order number
-        const changeOrderNumber = "21191668";
+
+        const changeOrderNumber = "21236341";
         await automation.enterChangeOrder(changeOrderNumber);
 
         // Click the Go button to submit the search
@@ -1193,15 +688,7 @@ class ChangeOrderAutomation {
 
         // Wait for popup and extract data from the detail table
         let extractedData = null;
-        try {
-            extractedData = await automation.waitForPopupAndExtractData();
-        } catch (popupError) {
-            console.log('Popup extraction failed:', popupError.message);
-            console.log('Trying alternative extraction methods...');
-
-            // Try to find data in current frames
-            extractedData = await automation.tryExtractFromFrames();
-        }
+        extractedData = await automation.waitForPopupAndExtractData();
 
         console.log('✅ Change Order automation completed successfully!');
         console.log(`🔍 Entered Change Order: ${changeOrderNumber}`);
@@ -1222,11 +709,9 @@ class ChangeOrderAutomation {
             console.log(JSON.stringify(extractedData));
         }
 
-        console.log('📸 Screenshots saved in images/ directory');
-        console.log('🎯 Search submitted and data extracted successfully');
 
         // Keep browser open for inspection
-        await automation.keepOpen();
+        await automation.close();
 
     } catch (error) {
         console.error('❌ Automation failed:', error.message);
@@ -1239,6 +724,6 @@ class ChangeOrderAutomation {
         }
 
         // Keep browser open even on error for debugging
-        await automation.keepOpen();
+        await automation.close();
     }
 })();
