@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node final_automation.js",
-    "gui": "electron automation_with_gui.js"
+    "gui": "electron automation_with_gui.js",
+    "request": "node rq_extraction.js",
+    "request-gui": "electron rq_automation_with_gui.js"
   },
   "keywords": [],
   "author": "",

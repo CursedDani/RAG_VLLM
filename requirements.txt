@@ -32,6 +32,7 @@ lunr>=0.6.2                    # Índice de búsqueda textual
 # --- Herramientas de Desarrollo ---
 selenium>=4.20.0               # Automatización de pruebas y scraping
 webdriver-manager>=3.8.5      # Manejo de controladores de navegador
+requests-ntlm>=1.1.0          # NTLM authentication support (optional)
 
 # --- Configuración ---
 python-dotenv>=1.0.0           # Manejo de variables de entorno
