@@ -2,15 +2,19 @@
   "name": "automation",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "final_automation.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node final_automation.js",
+    "gui": "electron automation_with_gui.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
   "dependencies": {
-    "puppeteer": "^24.17.0"
+    "puppeteer": "^24.23.0"
+  },
+  "devDependencies": {
+    "electron": "^38.4.0"
   }
 }

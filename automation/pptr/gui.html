@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CA Service Desk Manager - Data Extraction Results</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            background-color: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: 600;
+            font-size: 18px;
+            color: #495057;
+        }
+
+        .section-content {
+            padding: 20px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .data-table th,
+        .data-table td {
+            text-align: left;
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .data-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .data-table tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .timestamp {
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .field-label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 150px;
+        }
+
+        .field-value {
+            color: #212529;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-completed {
+            background-color: #cce5ff;
+            color: #004085;
+        }
+
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .status-default {
+            background-color: #e2e3e5;
+            color: #495057;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CA Service Desk Manager - Change Order Data</h1>
+        </div>
+
+        <div class="content">
+            <div id="loading" class="loading">
+                Waiting for data extraction...
+            </div>
+
+            <div id="data-container" style="display: none;">
+                <div class="section">
+                    <div class="section-header">
+                        Change Order Details
+                    </div>
+                    <div class="section-content">
+                        <table class="data-table" id="change-order-table">
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-header">
+                        Workflow Tasks
+                    </div>
+                    <div class="section-content">
+                        <table class="data-table" id="workflow-tasks-table">
+                            <thead>
+                                <tr>
+                                    <th>Sequence</th>
+                                    <th>Task</th>
+                                    <th>Description</th>
+                                    <th>Assignee</th>
+                                    <th>Group</th>
+                                    <th>Status</th>
+                                    <th>Start Date</th>
+                                    <th>Completion Date</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="timestamp" id="timestamp"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        function formatStatusBadge(status) {
+            if (!status) return '';
+
+            const statusLower = status.toLowerCase();
+            let badgeClass = 'status-default';
+
+            if (statusLower.includes('active') || statusLower.includes('open')) {
+                badgeClass = 'status-active';
+            } else if (statusLower.includes('completed') || statusLower.includes('closed')) {
+                badgeClass = 'status-completed';
+            } else if (statusLower.includes('pending') || statusLower.includes('waiting')) {
+                badgeClass = 'status-pending';
+            }
+
+            return `<span class="status-badge ${badgeClass}">${status}</span>`;
+        }
+
+        function displayChangeOrderData(data) {
+            const tableBody = document.querySelector('#change-order-table tbody');
+            tableBody.innerHTML = '';
+
+            if (!data || Object.keys(data).length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="2" class="no-data">No change order data available</td></tr>';
+                return;
+            }
+
+            Object.entries(data).forEach(([key, value]) => {
+                const row = document.createElement('tr');
+                const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                row.innerHTML = `
+                    <td class="field-label">${formattedKey}</td>
+                    <td class="field-value">${value || 'N/A'}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function displayWorkflowTasks(tasks) {
+            const tableBody = document.querySelector('#workflow-tasks-table tbody');
+            tableBody.innerHTML = '';
+
+            console.log('displayWorkflowTasks received:', tasks);
+            console.log('Type of tasks:', typeof tasks);
+            console.log('Is array:', Array.isArray(tasks));
+
+            // Handle different data structures
+            let taskArray = tasks;
+            if (tasks && typeof tasks === 'object' && !Array.isArray(tasks)) {
+                if (tasks.tasks && Array.isArray(tasks.tasks)) {
+                    taskArray = tasks.tasks;
+                } else {
+                    console.log('Converting object to array');
+                    taskArray = Object.values(tasks);
+                }
+            }
+
+            if (!taskArray || !Array.isArray(taskArray) || taskArray.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="8" class="no-data">No workflow tasks available</td></tr>';
+                return;
+            }
+
+            console.log('Processing task array:', taskArray);
+
+            taskArray.forEach((task, index) => {
+                console.log(`Task ${index}:`, task);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${task.sequence || 'N/A'}</td>
+                    <td>${task.task || 'N/A'}</td>
+                    <td>${task.description || 'N/A'}</td>
+                    <td>${task.assignee || 'N/A'}</td>
+                    <td>${task.group || 'N/A'}</td>
+                    <td>${formatStatusBadge(task.status) || 'N/A'}</td>
+                    <td>${task.start_date || 'N/A'}</td>
+                    <td>${task.completion_date || 'N/A'}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Listen for data from the main process
+        ipcRenderer.on('data-received', (event, extractedData) => {
+            console.log('GUI received data:', extractedData);
+
+            // Hide loading and show data
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('data-container').style.display = 'block';
+
+            // Display the data
+            if (extractedData.changeOrderData) {
+                displayChangeOrderData(extractedData.changeOrderData);
+            }
+
+            if (extractedData.workflowTasks) {
+                displayWorkflowTasks(extractedData.workflowTasks);
+            }
+
+            // Update timestamp
+            document.getElementById('timestamp').textContent =
+                `Data extracted on: ${new Date().toLocaleString()}`;
+        });
+
+        // Listen for automation errors
+        ipcRenderer.on('automation-error', (event, errorData) => {
+            console.error('Automation error received:', errorData);
+
+            // Hide loading and show error
+            document.getElementById('loading').innerHTML = `
+                <div style="color: #dc3545; font-weight: bold;">
+                    ❌ Automation Error: ${errorData.message}
+                </div>
+                <div style="margin-top: 10px; font-size: 14px;">
+                    Please check the console for more details and try again.
+                </div>
+            `;
+        });
+
+        // Initial message
+        console.log('GUI window loaded and ready to receive data');
+    </script>
+</body>
+
+</html>
