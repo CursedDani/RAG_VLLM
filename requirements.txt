@@ -25,6 +25,10 @@ streamlit>=1.28.0              # Interfaz web interactiva
 # --- APIs y Cliente LLM ---
 openai>=1.3.0                  # Cliente OpenAI compatible con vLLM
 requests>=2.31.0               # Llamadas HTTP a endpoints vLLM
+flask>=2.3.0                   # API server for tools (optional, for VPN deployment)
+flask-cors>=4.0.0              # CORS support for Flask API
+ldap3>=2.9.1                   # LDAP client for Active Directory queries
+pytz>=2023.3                   # Timezone support for date conversions
 
 # --- Búsqueda Textual ---
 lunr>=0.6.2                    # Índice de búsqueda textual

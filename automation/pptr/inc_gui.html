@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CA Service Desk Manager - Incident Data Extraction Results</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            background-color: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: 600;
+            font-size: 18px;
+            color: #495057;
+        }
+
+        .section-content {
+            padding: 20px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .data-table th,
+        .data-table td {
+            text-align: left;
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .data-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .data-table tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .timestamp {
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .field-label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 150px;
+        }
+
+        .field-value {
+            color: #212529;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-open {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-closed {
+            background-color: #cce5ff;
+            color: #004085;
+        }
+
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .status-cancelled {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-default {
+            background-color: #e2e3e5;
+            color: #495057;
+        }
+
+        .priority-critical {
+            background-color: #721c24;
+            color: white;
+            font-weight: bold;
+        }
+
+        .priority-high {
+            background-color: #f8d7da;
+            color: #721c24;
+            font-weight: bold;
+        }
+
+        .priority-medium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .priority-low {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .severity-critical {
+            background-color: #721c24;
+            color: white;
+            font-weight: bold;
+        }
+
+        .severity-high {
+            background-color: #dc3545;
+            color: white;
+            font-weight: bold;
+        }
+
+        .severity-medium {
+            background-color: #fd7e14;
+            color: white;
+        }
+
+        .severity-low {
+            background-color: #28a745;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CA Service Desk Manager - Incident Data</h1>
+        </div>
+
+        <div class="content">
+            <div id="loading" class="loading">
+                Waiting for incident data extraction...
+            </div>
+
+            <div id="data-container" style="display: none;">
+                <div class="section">
+                    <div class="section-header">
+                        Incident Details
+                    </div>
+                    <div class="section-content">
+                        <table class="data-table" id="incident-table">
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="timestamp" id="timestamp"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        function formatStatusBadge(status) {
+            if (!status) return '';
+
+            const statusLower = status.toLowerCase();
+            let badgeClass = 'status-default';
+
+            if (statusLower.includes('open') || statusLower.includes('new') || statusLower.includes('active')) {
+                badgeClass = 'status-open';
+            } else if (statusLower.includes('closed') || statusLower.includes('resolved') || statusLower.includes('completed')) {
+                badgeClass = 'status-closed';
+            } else if (statusLower.includes('pending') || statusLower.includes('waiting') || statusLower.includes('assigned') || statusLower.includes('in progress')) {
+                badgeClass = 'status-pending';
+            } else if (statusLower.includes('cancelled') || statusLower.includes('rejected')) {
+                badgeClass = 'status-cancelled';
+            }
+
+            return `<span class="status-badge ${badgeClass}">${status}</span>`;
+        }
+
+        function formatPriorityBadge(priority) {
+            if (!priority) return '';
+
+            const priorityLower = priority.toLowerCase();
+            let badgeClass = 'status-default';
+
+            if (priorityLower.includes('critical')) {
+                badgeClass = 'priority-critical';
+            } else if (priorityLower.includes('high') || priorityLower.includes('urgent')) {
+                badgeClass = 'priority-high';
+            } else if (priorityLower.includes('medium') || priorityLower.includes('normal')) {
+                badgeClass = 'priority-medium';
+            } else if (priorityLower.includes('low')) {
+                badgeClass = 'priority-low';
+            }
+
+            return `<span class="status-badge ${badgeClass}">${priority}</span>`;
+        }
+
+        function formatSeverityBadge(severity) {
+            if (!severity) return '';
+
+            const severityLower = severity.toLowerCase();
+            let badgeClass = 'status-default';
+
+            if (severityLower.includes('critical') || severityLower.includes('1')) {
+                badgeClass = 'severity-critical';
+            } else if (severityLower.includes('high') || severityLower.includes('2')) {
+                badgeClass = 'severity-high';
+            } else if (severityLower.includes('medium') || severityLower.includes('3')) {
+                badgeClass = 'severity-medium';
+            } else if (severityLower.includes('low') || severityLower.includes('4')) {
+                badgeClass = 'severity-low';
+            }
+
+            return `<span class="status-badge ${badgeClass}">${severity}</span>`;
+        }
+
+        function formatActiveBadge(active) {
+            if (!active) return '';
+
+            const activeLower = active.toLowerCase();
+            let badgeClass = 'status-default';
+
+            if (activeLower.includes('yes') || activeLower.includes('true') || activeLower.includes('active') || activeLower === 'y') {
+                badgeClass = 'status-open';
+            } else if (activeLower.includes('no') || activeLower.includes('false') || activeLower.includes('inactive') || activeLower === 'n') {
+                badgeClass = 'status-cancelled';
+            }
+
+            return `<span class="status-badge ${badgeClass}">${active}</span>`;
+        }
+
+        function displayIncidentData(data) {
+            const tableBody = document.querySelector('#incident-table tbody');
+            tableBody.innerHTML = '';
+
+            console.log('displayIncidentData received:', data);
+            console.log('Type of data:', typeof data);
+
+            if (!data || Object.keys(data).length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="2" class="no-data">No incident data available</td></tr>';
+                return;
+            }
+
+            // Define the order and labels for incident fields
+            const fieldOrder = [
+                { key: 'requester', label: 'Requester' },
+                { key: 'affected_end_user', label: 'Affected End User' },
+                { key: 'assignee', label: 'Assignee' },
+                { key: 'assignment_group', label: 'Assignment Group' },
+                { key: 'category', label: 'Category' },
+                { key: 'status', label: 'Status', special: 'status' },
+                { key: 'priority', label: 'Priority', special: 'priority' },
+                { key: 'severity', label: 'Severity', special: 'severity' },
+                { key: 'type', label: 'Type' },
+                { key: 'incident_type', label: 'Incident Type' },
+                { key: 'active', label: 'Active?', special: 'active' },
+                { key: 'summary', label: 'Summary' },
+                { key: 'incident_description', label: 'Description' }
+            ];
+
+            fieldOrder.forEach(field => {
+                const value = data[field.key];
+                if (value && value.trim() !== '') {
+                    const row = document.createElement('tr');
+                    let displayValue = value;
+
+                    // Apply special formatting
+                    if (field.special === 'status') {
+                        displayValue = formatStatusBadge(value);
+                    } else if (field.special === 'priority') {
+                        displayValue = formatPriorityBadge(value);
+                    } else if (field.special === 'severity') {
+                        displayValue = formatSeverityBadge(value);
+                    } else if (field.special === 'active') {
+                        displayValue = formatActiveBadge(value);
+                    }
+
+                    row.innerHTML = `
+                        <td class="field-label">${field.label}</td>
+                        <td class="field-value">${displayValue || 'N/A'}</td>
+                    `;
+                    tableBody.appendChild(row);
+                }
+            });
+
+            // If no fields were added, show no data message
+            if (tableBody.children.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="2" class="no-data">No incident data fields found</td></tr>';
+            }
+        }
+
+        // Listen for data from the main process
+        ipcRenderer.on('data-received', (event, extractedData) => {
+            console.log('GUI received data:', extractedData);
+
+            // Hide loading and show data
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('data-container').style.display = 'block';
+
+            // Display the data
+            if (extractedData.incidentData) {
+                displayIncidentData(extractedData.incidentData);
+            } else {
+                // Handle legacy format
+                displayIncidentData(extractedData);
+            }
+
+            // Update timestamp
+            document.getElementById('timestamp').textContent =
+                `Incident data extracted on: ${new Date().toLocaleString()}`;
+        });
+
+        // Listen for automation errors
+        ipcRenderer.on('automation-error', (event, errorData) => {
+            console.error('Automation error received:', errorData);
+
+            // Hide loading and show error
+            document.getElementById('loading').innerHTML = `
+                <div style="color: #dc3545; font-weight: bold;">
+                    ❌ Incident Extraction Error: ${errorData.message}
+                </div>
+                <div style="margin-top: 10px; font-size: 14px;">
+                    Please check the console for more details and try again.
+                </div>
+            `;
+        });
+
+        // Initial message
+        console.log('Incident GUI window loaded and ready to receive data');
+    </script>
+</body>
+
+</html>

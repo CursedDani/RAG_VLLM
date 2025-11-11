@@ -77,3 +77,12 @@ Thumbs.db
 data/
 node_modules/
 automation/pptr/images
+
+# VPN credentials (NEVER commit these!)
+vpn/
+*.vpn
+vpn_password.txt
+
+# Docker
+docker-compose.override.yml
+.dockerignore

@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  ad-automation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ad-automation-vpn
+    # Separate network - VPN traffic won't affect your local machine
+    networks:
+      - vpn_network
+    ports:
+      - "5000:5000" # Expose API on localhost:5000
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+      - AD_SERVER=${AD_SERVER:-net-dc02}
+      - BASE_DN=${BASE_DN:-dc=epmtelco,dc=com,dc=co}
+      - USER_DOMAIN=${USER_DOMAIN:-EPMTELCO\\rinforma}
+      - AD_PASSWORD=${AD_PASSWORD:-ChatBot2025/*-+}
+    # Privileged mode required for VPN connection
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./automation:/app/automation # Mount automation scripts
+      - ./api_server.py:/app/api_server.py # Mount API for live editing
+    stdin_open: true # Keep stdin open for interactive shell
+    tty: true # Allocate a pseudo-TTY for manual VPN setup
+    restart: unless-stopped
+
+networks:
+  vpn_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16 # Isolated network for VPN
