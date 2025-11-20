@@ -193,24 +193,46 @@ streamlit run app/ui_main.py
 ```
 rag_vllm/
 ├── app/
-│   ├── ui_main.py              # Interfaz Streamlit
+│   ├── ui_main.py              # Interfaz Streamlit principal
+│   ├── ui_main_copy.py         # Interfaz con integración de herramientas
 │   ├── rag_logic.py            # Lógica RAG híbrida
+│   ├── tools_interface.py      # Interface para herramientas de automatización
+│   ├── chat_manager.py         # Gestor de conversaciones
 │   └── prompts/
-│       ├── system_prompt.txt   # Prompt del sistema
-│       └── wifi_expert_prompt.txt # Prompt especializado
+│       ├── system_prompt.txt           # Prompt del sistema base
+│       ├── Security.txt                # Prompt para seguridad
+│       ├── Security_with_tools.txt     # Prompt con function calling
+│       └── Security_with_json_tools.txt # Prompt con JSON tool calling
 ├── scripts/
 │   ├── ingest.py               # Ingesta con python-docx
 │   ├── ingest_QA.py            # Ingesta de pares de preguntas-Respuestas
 │   └── docx_cleanup.py         # Limpieza de documentos para la ingesta
+├── automation/
+│   ├── acc_status.py           # Extracción de tickets de Acceso
+│   ├── pass_status.py          # Extracción de tickets de Contraseña
+│   ├── full_status.py          # Extracción completa multi-tipo
+│   └── pptr/                   # Automatización con Puppeteer
+│       ├── final_automation.js     # Extracción de Change Orders
+│       ├── inc_extraction.js       # Extracción de Incidents
+│       ├── rq_extraction.js        # Extracción de Requests
+│       ├── package.json            # Dependencias Node.js
+│       └── *_gui.html              # Interfaces gráficas opcionales
+├── output/                     # Archivos JSON generados por automatización
 ├── data/
 │   ├── docx/                   # Documentos DOCX a insertar en la base de datos
 │   ├── docs/                   # Documentos originales, antes de aplicar la limpieza
 │   ├── qa_pairs/               # Documentos(s) con pares de pregunta-respuesta para ingestar
 │   ├── Tigo_logo.png
 │   └── Bot_icon.png
+├── mcp-server/                 # Model Context Protocol server
+│   └── server.py
 ├── venv/                       # Entorno virtual
 ├── requirements.txt            # Dependencias completas
-├── requirements-minimal.txt    # Dependencias sin marker-pdf
+├── requirements-docker.txt     # Dependencias para Docker
+├── docker-compose.yml          # Configuración Docker con VPN
+├── Dockerfile                  # Imagen Docker
+├── api_server.py               # Servidor API REST
+├── api_client.py               # Cliente API
 ├── .env                        # Variables de entorno
 ├── .gitignore
 └── README.md
@@ -263,6 +285,271 @@ conda install psycopg2
 brew install postgresql
 ```
 
+
+## 🤖 Sistema de Automatización
+
+El proyecto incluye dos sistemas de automatización complementarios para extraer información de CA Service Desk Manager:
+
+### 1. Automatización Python (DirectAccess)
+
+Scripts Python ubicados en `automation/` que utilizan la API interna de CA Service Desk:
+
+#### Scripts Disponibles
+
+- **`acc_status.py`**: Extrae estado de tickets de Acceso
+- **`pass_status.py`**: Extrae estado de tickets de Contraseña  
+- **`full_status.py`**: Extrae información completa de múltiples tipos de tickets
+
+#### Uso Individual
+
+```bash
+# Ejecutar desde la raíz del proyecto
+python automation/acc_status.py <TICKET_NUMBER>
+python automation/pass_status.py <TICKET_NUMBER>
+python automation/full_status.py <TICKET_NUMBER>
+```
+
+#### Características
+- ✅ Acceso directo a la API interna de CA Service Desk
+- ✅ Extracción rápida y estructurada
+- ✅ Salida en formato JSON
+- ⚠️ Requiere conectividad a la red interna (VPN)
+
+### 2. Automatización Puppeteer (Web Scraping)
+
+Scripts Node.js ubicados en `automation/pptr/` que automatizan la interfaz web:
+
+#### Scripts Disponibles
+
+- **`final_automation.js`**: Extrae órdenes de cambio (Change Orders)
+- **`inc_extraction.js`**: Extrae incidentes
+- **`rq_extraction.js`**: Extrae solicitudes (Requests)
+
+#### Instalación de Dependencias
+
+```bash
+cd automation/pptr
+npm install
+```
+
+#### Uso Individual
+
+```bash
+cd automation/pptr
+
+# Extraer orden de cambio
+node final_automation.js CHG0012345
+
+# Extraer incidente
+node inc_extraction.js INC0067890
+
+# Extraer solicitud
+node rq_extraction.js RQ0054321
+```
+
+#### Características
+- ✅ Automatización completa de la interfaz web
+- ✅ Extracción de datos detallados incluyendo Workflow Tasks
+- ✅ Salida en JSON (consola + archivo)
+- ✅ Modo headless (sin interfaz gráfica)
+- ✅ Capturas de pantalla en caso de error
+- ⚠️ Requiere conectividad a la red interna (VPN)
+
+#### Salida de Datos
+
+Cada script genera:
+1. **Salida JSON en consola**: Una línea JSON para consumo por API
+2. **Archivo JSON en `output/`**: Archivo timestamped para respaldo
+   - Formato: `{tipo}_{numero}_{timestamp}.json`
+   - Ejemplo: `change_order_CHG0012345_2025-11-20T19-15-08-604Z.json`
+
+#### Estructura de Datos Extraídos
+
+**Change Orders (`final_automation.js`):**
+```json
+{
+  "changeOrderData": {
+    "requester": "Usuario Solicitante",
+    "affected_end_user": "Usuario Afectado",
+    "category": "Categoría",
+    "status": "Estado",
+    "order_description": "Descripción"
+  },
+  "workflowTasks": [
+    {
+      "sequence": "1",
+      "task": "Nombre de Tarea",
+      "description": "Descripción",
+      "assignee": "Asignado",
+      "status": "Estado",
+      "start_date": "Fecha Inicio",
+      "completion_date": "Fecha Completado"
+    }
+  ]
+}
+```
+
+**Incidents (`inc_extraction.js`):**
+```json
+{
+  "incidentData": {
+    "requester": "Solicitante",
+    "affected_end_user": "Usuario Afectado",
+    "category": "Categoría",
+    "status": "Estado",
+    "priority": "Prioridad",
+    "severity": "Severidad",
+    "summary": "Resumen",
+    "incident_description": "Descripción"
+  }
+}
+```
+
+**Requests (`rq_extraction.js`):**
+```json
+{
+  "requestData": {
+    "requester": "Solicitante",
+    "affected_end_user": "Usuario Afectado",
+    "category": "Categoría",
+    "status": "Estado",
+    "priority": "Prioridad",
+    "summary": "Resumen",
+    "request_description": "Descripción"
+  }
+}
+```
+
+### 🐳 Uso con Docker + VPN
+
+Para ejecutar las automatizaciones desde un contenedor Docker con acceso VPN:
+
+#### 1. Configurar Docker Compose
+
+El archivo `docker-compose.yml` ya está configurado para:
+- Montar el directorio `automation/` como volumen
+- Instalar Node.js y dependencias de Puppeteer
+- Mantener conectividad VPN
+
+#### 2. Ejecutar Automatización en el Contenedor
+
+```bash
+# Iniciar contenedor con VPN
+docker-compose up -d
+
+# Ejecutar script Python
+docker exec rag-vllm-app python automation/acc_status.py <TICKET_NUMBER>
+
+# Ejecutar script Puppeteer
+docker exec rag-vllm-app node automation/pptr/final_automation.js CHG0012345
+
+# Ver logs
+docker-compose logs -f app
+```
+
+#### 3. Acceder a Archivos de Salida
+
+Los archivos JSON generados están disponibles en:
+```bash
+# Desde el host
+ls -l output/
+
+# Desde el contenedor
+docker exec rag-vllm-app ls -l /app/output/
+```
+
+### 🔧 Integración con el Chatbot
+
+Las automatizaciones están integradas con el sistema RAG a través de `app/tools_interface.py`:
+
+#### Herramientas Disponibles
+
+```python
+# En el chatbot, el LLM puede invocar:
+{
+  "tool": "extract_change_order",
+  "args": {"change_order_number": "CHG0012345"}
+}
+
+{
+  "tool": "extract_incident", 
+  "args": {"incident_number": "INC0067890"}
+}
+
+{
+  "tool": "extract_request",
+  "args": {"request_number": "RQ0054321"}
+}
+```
+
+El chatbot automáticamente:
+1. Detecta cuándo se necesita información de tickets
+2. Ejecuta el script de automatización correspondiente
+3. Parsea el resultado JSON
+4. Presenta la información al usuario de forma estructurada
+
+### 📝 Notas Importantes
+
+#### Requisitos de Red
+- **Ambos sistemas** requieren acceso a la red interna de CA Service Desk
+- Para uso fuera de la red corporativa, se necesita **conexión VPN activa**
+- El contenedor Docker debe tener acceso a la VPN del host
+
+#### Credenciales
+Las credenciales están hardcodeadas en los scripts de Puppeteer:
+- Usuario: `rinforma`
+- Contraseña: `ChatBot2025/*-+`
+
+⚠️ **Seguridad**: En producción, estas credenciales deberían estar en variables de entorno.
+
+#### Limpieza de Logs
+Los scripts de Puppeteer han sido optimizados para:
+- ❌ Sin logs de debug en consola
+- ❌ Sin capturas de pantalla automáticas
+- ✅ Solo salida JSON estructurada
+- ✅ Errores mínimos (solo críticos)
+
+Esto mejora la legibilidad cuando se integran con el chatbot.
+
+### 🐛 Troubleshooting de Automatización
+
+#### Error: "ECONNREFUSED" (Puppeteer)
+```
+Error: connect ECONNREFUSED 10.100.85.31:80
+```
+**Solución**: Verificar conectividad VPN y acceso a CA Service Desk:
+```bash
+ping 10.100.85.31
+curl http://10.100.85.31/CAisd/pdmweb1.exe
+```
+
+#### Error: "Ticket not found"
+```
+Error: No se encontró información del ticket
+```
+**Solución**: 
+- Verificar que el número de ticket sea correcto
+- Verificar que el tipo de ticket coincida con el script usado
+- Verificar permisos del usuario `rinforma`
+
+#### Error: Chromium no encontrado (Puppeteer)
+```
+Error: Could not find Chromium
+```
+**Solución**:
+```bash
+cd automation/pptr
+npm install puppeteer
+# O reinstalar todo
+rm -rf node_modules package-lock.json
+npm install
+```
+
+#### Timeout en Extracción
+Si los scripts toman demasiado tiempo o fallan por timeout:
+- Verificar la velocidad de la conexión VPN
+- Aumentar timeouts en el código si es necesario
+- Verificar que CA Service Desk esté respondiendo
 
 ## 👥 Autores
 
