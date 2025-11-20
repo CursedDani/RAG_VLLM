@@ -12,12 +12,6 @@ class ChangeOrderAutomation {
     }
 
     async init() {
-        // Ensure images directory exists
-        const imagesDir = 'images';
-        if (!fs.existsSync(imagesDir)) {
-            fs.mkdirSync(imagesDir, { recursive: true });
-        }
-
         this.browser = await puppeteer.launch({
             headless: true,
             args: [
@@ -35,21 +29,10 @@ class ChangeOrderAutomation {
             password: 'ChatBot2025/*-+'
         });
         await this.page.setViewport({ width: 1920, height: 1080 });
-
-        // Set up error handling
-        this.page.on('error', (error) => {
-            console.error('Page error:', error.message);
-        });
-
-        this.page.on('pageerror', (error) => {
-            console.error('Page error:', error.message);
-        });
     }
 
     async navigateToApplication() {
-        console.log('Navigating to CA Service Desk Manager...');
-
-        // Test 2: Check internal network
+        // Test internal network
         try {
             const response = await this.page.goto('http://10.100.85.31', { timeout: 15000 });
         } catch (e) {
@@ -60,14 +43,10 @@ class ChangeOrderAutomation {
             timeout: 60000
         });
 
-        console.log(`Navigation response: ${response.status()} ${response.statusText()}`);
-
         if (response.status() !== 200) {
             throw new Error(`Failed to load application: HTTP ${response.status()}`);
         }
 
-        // Wait for frames to load using a more reliable method
-        console.log('Waiting for frames to load...');
         await this.waitForFramesToLoad();
 
         return response;
@@ -100,7 +79,6 @@ class ChangeOrderAutomation {
                 }
 
                 if (framesLoaded >= frames.length - 1) { // Allow for one frame to potentially fail
-                    console.log(`${framesLoaded} frames loaded successfully`);
                     break;
                 }
             }
@@ -111,8 +89,6 @@ class ChangeOrderAutomation {
     }
 
     async findTargetFrame() {
-        console.log('Searching for target frame...');
-
         const frames = this.page.frames();
         const frame = frames[1];
         this.targetFrame = frame;
@@ -120,8 +96,6 @@ class ChangeOrderAutomation {
     }
 
     async waitForFormReady() {
-        console.log('Waiting for Change Order form to be ready...');
-
         if (!this.targetFrame) {
             throw new Error('Target frame not set');
         }
@@ -138,8 +112,6 @@ class ChangeOrderAutomation {
                 visible: true
             });
 
-            console.log('New UI elements are ready');
-
             // Wait for form to be fully loaded
             await this.targetFrame.waitForFunction(() => {
                 const selector = document.querySelector('#ticket_type');
@@ -147,17 +119,14 @@ class ChangeOrderAutomation {
                 return selector && input && document.readyState === 'complete';
             }, { timeout: 15000 });
 
-            console.log('New form is fully ready');
             return;
 
         } catch (e) {
-            console.log('New UI elements not found');
+            // Form not ready
         }
     }
 
     async selectChangeOrderType() {
-        console.log('Selecting Change Order from ticket type dropdown...');
-
         if (!this.targetFrame) {
             throw new Error('Target frame not set');
         }
@@ -168,15 +137,11 @@ class ChangeOrderAutomation {
         // Select "Change Order" option (value="go_chg")
         await this.targetFrame.select('#ticket_type', 'go_chg');
 
-        console.log('Change Order selected from dropdown');
-
         // Verify the selection
         const selectedValue = await this.targetFrame.evaluate(() => {
             const select = document.querySelector('#ticket_type');
             return select ? select.value : null;
         });
-
-        console.log(`Verified selected value: ${selectedValue}`);
 
         if (selectedValue !== 'go_chg') {
             throw new Error(`Selection failed: expected go_chg, got ${selectedValue}`);
@@ -190,8 +155,6 @@ class ChangeOrderAutomation {
             throw new Error('Change Order Number is required');
         }
 
-        console.log(`Entering Change Order: ${changeOrderNumber}`);
-
         // Try new UI input field first
         let inputField = await this.targetFrame.$('input[name="searchKey"]');
 
@@ -200,21 +163,15 @@ class ChangeOrderAutomation {
             throw new Error('Change Order input field not found');
         }
 
-        console.log(`Using input field selector: ${inputSelector}`);
-
         // Clear and fill the input field
         await inputField.click({ clickCount: 3 }); // Triple click to select all
         await inputField.type(changeOrderNumber);
-
-        console.log(`Successfully entered Change Order Number: ${changeOrderNumber}`);
 
         // Verify the value was entered correctly
         const enteredValue = await this.targetFrame.evaluate((selector) => {
             const input = document.querySelector(selector);
             return input ? input.value : null;
         }, inputSelector);
-
-        console.log(`Verified entered value: ${enteredValue}`);
 
         if (enteredValue !== changeOrderNumber) {
             throw new Error(`Value mismatch: expected ${changeOrderNumber}, got ${enteredValue}`);
@@ -224,8 +181,6 @@ class ChangeOrderAutomation {
     }
 
     async clickGoButton() {
-        console.log('Looking for Go button...');
-
         let goButton = null;
 
         if (!goButton) {
@@ -253,8 +208,6 @@ class ChangeOrderAutomation {
             throw new Error('Go button not found');
         }
 
-        console.log('Clicking Go button...');
-
         // Set up popup window listener before clicking
         const popupPromise = new Promise((resolve) => {
             this.page.once('popup', resolve);
@@ -270,31 +223,23 @@ class ChangeOrderAutomation {
         ]);
 
         if (result && result.type === 'popup') {
-            console.log('Popup window detected');
             this.popupPage = result.popup;
 
             try {
                 await this.popupPage.waitForFunction(() => document.readyState !== 'loading', { timeout: 10000 }).catch(() => { });
-                console.log('Popup page loaded successfully');
             } catch (e) {
-                console.log('Popup loading warning:', e.message);
                 // Continue anyway as the popup might still be usable
             }
         }
 
-        console.log('Go button clicked successfully');
         return true;
     }
 
     async waitForPopupAndExtractData() {
-        console.log('Waiting for popup window to load...');
-
         if (!this.popupPage) {
             throw new Error('Popup page not available');
         }
 
-        // First, let's see what we have in the popup and find the right frame
-        console.log('Debugging popup content...');
         await this.debugPopupContent();
 
         // Try multiple approaches to wait for content
@@ -303,18 +248,12 @@ class ChangeOrderAutomation {
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                console.log(`Attempt ${attempt}: Looking for detail table...`);
-
                 // Wait for the detail table to be present with shorter timeout
                 await this.popupPage.waitForSelector('#dtltbl0', { timeout: 5000 });
-                console.log('Detail table found in popup');
                 tableFound = true;
                 break;
             } catch (e) {
-                console.log(`Attempt ${attempt} failed: ${e.message}`);
-
                 if (attempt < maxAttempts) {
-                    console.log('Waiting 2 seconds before retry...');
                     await new Promise(resolve => setTimeout(resolve, 2000));
 
                     // Check if popup is still alive
@@ -326,7 +265,6 @@ class ChangeOrderAutomation {
 
                     // Re-check frames in case content loaded later
                     if (attempt === maxAttempts - 1) {
-                        console.log('Last attempt: Re-checking popup frames for detail table...');
                         await this.recheckPopupFrames();
                     }
                 }
@@ -355,7 +293,6 @@ class ChangeOrderAutomation {
 
             // Get all rows
             const rows = table.querySelectorAll('tr');
-            console.log(`Found ${rows.length} rows in table`);
 
             // Process rows in pairs (header row + data row)
             for (let i = 0; i < rows.length; i += 2) {
@@ -445,7 +382,7 @@ class ChangeOrderAutomation {
                 tableData.order_description = orderDescription.trim();
             }
         } catch (e) {
-            console.log('Could not extract order description:', e.message);
+            // Could not extract order description
         }
 
         // Ensure we only return the fields we need
@@ -477,30 +414,19 @@ class ChangeOrderAutomation {
 
     async extractWorkflowTasks() {
         try {
-            console.log('🔄 Extracting Workflow Tasks data...');
-
             if (!this.popupPage) {
-                console.log('No popup page available for workflow extraction');
                 return null;
             }
-
-            // First, look for the workflow tasks button and click it
-            console.log('Looking for Workflow Tasks button...');
 
             const workflowButton = await this.popupPage.$('#accrdnHyprlnk2');
             if (!workflowButton) {
-                console.log('Workflow Tasks button not found');
                 return null;
             }
 
-            console.log('Found Workflow Tasks button, clicking...');
             await workflowButton.click();
 
             // Wait a moment for the content to load
             await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // Look for the workflow tasks table
-            console.log('Looking for workflow tasks table...');
 
             // Try to find workflow-related tables
             const workflowTableData = await this.popupPage.evaluate(() => {
@@ -511,9 +437,6 @@ class ChangeOrderAutomation {
                 if (!workflowTable) {
                     // Try to find table with class "tab" and summary "Task List"
                     workflowTable = document.querySelector('table.tab[summary="Task List"]');
-                    if (workflowTable) {
-                        console.log('Found workflow table by class and summary');
-                    }
                 }
 
                 if (!workflowTable) {
@@ -524,7 +447,6 @@ class ChangeOrderAutomation {
                             tableText.includes('assignee') && tableText.includes('status');
                         if (hasTaskHeaders) {
                             workflowTable = table;
-                            console.log('Found workflow table by header content search');
                             break;
                         }
                     }
@@ -534,14 +456,12 @@ class ChangeOrderAutomation {
                     // Look for tables near the workflow section
                     const workflowSection = document.querySelector('#accrdnHyprlnk2');
                     if (workflowSection) {
-                        console.log('Looking for tables near workflow section');
                         let parent = workflowSection.parentElement;
                         let attempts = 0;
                         while (parent && !workflowTable && attempts < 5) {
                             const tables = parent.querySelectorAll('table');
                             if (tables.length > 0) {
                                 workflowTable = tables[tables.length - 1]; // Get the last table (might be workflow tasks)
-                                console.log('Found table near workflow section');
                                 break;
                             }
                             parent = parent.parentElement;
@@ -553,8 +473,6 @@ class ChangeOrderAutomation {
                 if (!workflowTable) {
                     return { error: 'No workflow table found', debugInfo: `Checked ${allTables.length} tables` };
                 }
-
-                console.log(`Found workflow table: id="${workflowTable.id}", class="${workflowTable.className}"`);
 
                 // Extract structured data from the workflow tasks table
                 const data = {
@@ -625,15 +543,12 @@ class ChangeOrderAutomation {
             });
 
             if (workflowTableData && !workflowTableData.error) {
-                console.log('📋 Extracted Workflow Tasks Data:');
                 return workflowTableData;
             } else {
-                console.log('Could not extract workflow tasks data:', workflowTableData?.error || 'Unknown error');
                 return null;
             }
 
         } catch (e) {
-            console.log('Error extracting workflow tasks:', e.message);
             return null;
         }
     }
@@ -641,17 +556,7 @@ class ChangeOrderAutomation {
     async close() {
         if (this.browser) {
             await this.browser.close();
-            console.log('Browser closed');
         }
-    }
-
-    // Method to keep browser open for manual inspection
-    async keepOpen() {
-        console.log('Browser will remain open for manual inspection...');
-        console.log('Press Ctrl+C to close the browser and exit.');
-
-        // Keep the script running
-        return new Promise(() => { });
     }
 }
 
@@ -660,70 +565,44 @@ class ChangeOrderAutomation {
     const automation = new ChangeOrderAutomation();
 
     try {
-        // Initialize browser and page
         await automation.init();
-
-        // Navigate to the application
-        console.log('🚀 Starting Change Order automation...');
         await automation.navigateToApplication();
-
-        // Find the target frame containing the form
         await automation.findTargetFrame();
-
-        // Wait for form to be ready
         await automation.waitForFormReady();
-
-        // Select Change Order from the ticket type dropdown (for new UI)
         await automation.selectChangeOrderType();
 
-        // Extract form data for debugging
+        const changeOrderNumber = process.argv[2];
 
-        // Enter the specific change order number
+        if (!changeOrderNumber) {
+            throw new Error('Change Order Number is required. Usage: node final_automation.js <CHG_NUMBER>');
+        }
 
-        const changeOrderNumber = "21236341";
         await automation.enterChangeOrder(changeOrderNumber);
-
-        // Click the Go button to submit the search
         await automation.clickGoButton();
 
-        // Wait for popup and extract data from the detail table
         let extractedData = null;
         extractedData = await automation.waitForPopupAndExtractData();
 
-        console.log('✅ Change Order automation completed successfully!');
-        console.log(`🔍 Entered Change Order: ${changeOrderNumber}`);
-
         if (extractedData) {
-            if (extractedData.changeOrderData) {
-                console.log('📊 Change Order Data:', JSON.stringify(extractedData.changeOrderData, null, 2));
-            }
-            if (extractedData.workflowTasks) {
-                console.log('🔄 Workflow Tasks Data:', JSON.stringify(extractedData.workflowTasks, null, 2));
-            }
-            // Handle legacy format (if extractedData is just the change order data)
-            if (!extractedData.changeOrderData && !extractedData.workflowTasks) {
-                console.log('📊 Extracted Data:', JSON.stringify(extractedData, null, 2));
+            // Save to JSON file
+            const outputDir = 'output';
+            if (!fs.existsSync(outputDir)) {
+                fs.mkdirSync(outputDir, { recursive: true });
             }
 
-            // Output structured data for GUI consumption (single line JSON)
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const filename = `${outputDir}/change_order_${changeOrderNumber}_${timestamp}.json`;
+
+            fs.writeFileSync(filename, JSON.stringify(extractedData, null, 2), 'utf-8');
+
+            // Output structured data for API consumption (single line JSON)
             console.log(JSON.stringify(extractedData));
         }
 
-
-        // Keep browser open for inspection
         await automation.close();
 
     } catch (error) {
-        console.error('❌ Automation failed:', error.message);
-        console.error('Stack trace:', error.stack);
-
-        try {
-            await automation.takeScreenshot('error_screenshot.png');
-        } catch (screenshotError) {
-            console.log('Could not take error screenshot:', screenshotError.message);
-        }
-
-        // Keep browser open even on error for debugging
         await automation.close();
+        process.exit(1);
     }
 })();

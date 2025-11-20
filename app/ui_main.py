@@ -4,7 +4,7 @@ import openai
 from dotenv import load_dotenv
 import requests
 import html
-from chat_manager import ChatManager
+import json
 
 # Importar lógica RAG del módulo local app/rag_logic.py.
 try:
@@ -14,6 +14,17 @@ try:
     )
 except ImportError as e:
     st.error(f"Error: No se pudo importar 'rag_logic.py': {e}.")
+    st.stop()
+
+# Import tools interface for automation endpoints
+try:
+    from tools_interface import (
+        get_tools_definitions,
+        tools_interface,
+        format_tool_result
+    )
+except ImportError as e:
+    st.error(f"Error: No se pudo importar 'tools_interface.py': {e}.")
     st.stop() 
 
 load_dotenv(override=True)
@@ -31,7 +42,7 @@ client = openai.OpenAI(
 # Construye rutas a archivos.
 APP_DIR = os.path.dirname(__file__)
 PROMPT_DIR = os.path.join(APP_DIR, "prompts")
-SYSTEM_PROMPT_FILE = os.path.join(PROMPT_DIR, "Security.txt")
+SYSTEM_PROMPT_FILE = os.path.join(PROMPT_DIR, "Security_with_json_tools.txt")  # JSON-based tool calling
 BOT_ICON_PATH = os.path.join(APP_DIR, "..", "data", "Bot_icon.jpg")
 LOGO_PATH = os.path.join(APP_DIR, "..", "data", "Tigo_logo.png")
 # Número de documentos a recuperar para el contexto RAG.
@@ -103,11 +114,8 @@ def load_system_prompt_cached(_prompt_file_path):
         st.warning(f"No se pudo cargar el prompt del sistema desde '{_prompt_file_path}'. Usando prompt por defecto.")
         return "Eres un asistente IA que responde preguntas basándose en un contexto."
 
-# Initialize chat manager
-chat_manager = ChatManager()
-
 # --- Inicialización y Carga de Recursos ---
-st.set_page_config(page_title="Agente InfoSec", layout="wide")  # Changed to wide
+st.set_page_config(page_title="Agente InfoSec", layout="wide")
 
 # Custom CSS
 st.markdown("""
@@ -128,29 +136,6 @@ st.markdown("""
     
     div[data-testid="stChatInput"] button:hover {
         background-color: #00005A !important;
-    }
-    
-    /* Sidebar styles */
-    .sidebar .element-container {
-        margin-bottom: 10px;
-    }
-    
-    .chat-item {
-        padding: 8px 12px;
-        margin: 4px 0;
-        border-radius: 8px;
-        border: 1px solid #e0e0e0;
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-    
-    .chat-item:hover {
-        background-color: #f0f2f6;
-    }
-    
-    .chat-item.active {
-        background-color: #e3f2fd;
-        border-color: #00005A;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -176,75 +161,21 @@ if not VLLM_client or not documents_list_from_db or not lunr_idx:
     st.error("No se pudieron cargar los recursos necesarios. La aplicación no puede continuar.")
     st.stop()
 
+# Initialize chat history in session state
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-# --- Sidebar for Chat Management ---
+# Add sidebar with clear chat button
 with st.sidebar:
-    st.header("💬 Chats")
-    
-    # New chat button
-    if st.button("➕ Nuevo Chat", use_container_width=True):
-        new_chat_id = chat_manager.create_new_chat()
-        st.session_state.current_chat_id = new_chat_id
+    st.header("⚙️ Opciones")
+    if st.button("🗑️ Limpiar Conversación", use_container_width=True):
         st.session_state.chat_history = []
         st.rerun()
     
-    # Load all chats
-    all_chats = chat_manager.get_all_chats()
-    
-    # Initialize current chat if not exists
-    if "current_chat_id" not in st.session_state:
-        if all_chats:
-            st.session_state.current_chat_id = list(all_chats.keys())[0]
-        else:
-            st.session_state.current_chat_id = chat_manager.create_new_chat()
-    
-    # Display chat list
-    if all_chats:
-        st.subheader("Chats Disponibles")
-        for chat_id, chat_info in all_chats.items():
-            col1, col2 = st.columns([4, 1])
-            
-            with col1:
-                is_active = chat_id == st.session_state.current_chat_id
-                if st.button(
-                    f"{'🟦' if is_active else '⬜'} {chat_info['title'][:30]}...",
-                    key=f"chat_{chat_id}",
-                    use_container_width=True,
-                    type="primary" if is_active else "secondary"
-                ):
-                    st.session_state.current_chat_id = chat_id
-                    st.session_state.chat_history = chat_manager.get_chat_history(chat_id)
-                    st.rerun()
-            
-            with col2:
-                if st.button("🗑️", key=f"delete_{chat_id}", help="Eliminar chat"):
-                    chat_manager.delete_chat(chat_id)
-                    if chat_id == st.session_state.current_chat_id:
-                        remaining_chats = chat_manager.get_all_chats()
-                        if remaining_chats:
-                            st.session_state.current_chat_id = list(remaining_chats.keys())[0]
-                            st.session_state.chat_history = chat_manager.get_chat_history(st.session_state.current_chat_id)
-                        else:
-                            new_chat_id = chat_manager.create_new_chat()
-                            st.session_state.current_chat_id = new_chat_id
-                            st.session_state.chat_history = []
-                    st.rerun()
-            
-            # Show chat info
-            st.caption(f"📅 {chat_info.get('created_at', '')[:16]} | 💬 {chat_info.get('message_count', 0)} mensajes")
+    st.divider()
+    st.caption(f"💬 Mensajes en conversación: {len(st.session_state.chat_history)}")
 
 # --- Main Chat Area ---
-# Load current chat history if not in session state
-if "chat_history" not in st.session_state:
-    if "current_chat_id" in st.session_state:
-        st.session_state.chat_history = chat_manager.get_chat_history(st.session_state.current_chat_id)
-    else:
-        st.session_state.chat_history = []
-
-# Display current chat title
-if "current_chat_id" in st.session_state:
-    current_chat_info = chat_manager.load_chats_index().get(st.session_state.current_chat_id, {})
-    st.text(f"📝 {current_chat_info.get('title', 'Chat Actual')}")
 
 # --- Interfaz de Chat Principal ---
 for role, message in st.session_state.chat_history:
@@ -352,6 +283,9 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
 
 
 
+        # NOTE: Tools are available via tools_interface but vLLM doesn't support function calling
+        # Tools must be called manually or the LLM must be instructed to output JSON for tool calls
+        
         # Llama al LLM de vLLM con el historial y contexto usando requests
         try:
             url = f"{VLLM_ENDPOINT}/v1/chat/completions"
@@ -359,14 +293,15 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
                 "model": VLLM_MODEL_GENERATION,
                 "messages": messages_for_llm,
                 "temperature": 0.4,
-                "stream": True,
+                "stream": True,  # Enable streaming for better UX
                 "max_tokens": 800,
                 "top_p": 0.9,
                 "frequency_penalty": 0.5,
                 "presence_penalty": 0.3
+                # NOTE: "tools" parameter removed - vLLM doesn't support it
             }
-            with requests.post(url, json=payload, stream=True, timeout=5) as response:
-                print(response)
+            
+            with requests.post(url, json=payload, stream=True, timeout=30) as response:
                 response.raise_for_status()
                 current_response_text = ""
                 for line in response.iter_lines(decode_unicode=True):
@@ -375,7 +310,6 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
                     data = line.removeprefix("data:").strip()
                     if data == "[DONE]":
                         break
-                    import json
                     chunk = json.loads(data)
                     delta = chunk["choices"][0].get("delta", {})
                     content = delta.get("content", "")
@@ -396,20 +330,99 @@ if user_question := st.chat_input("Escribe tu pregunta..."):
                         </div>
                         """, unsafe_allow_html=True)
                 
-                # Final update without cursor
-                escaped_final_text = html.escape(current_response_text)
-                bot_response_placeholder.markdown(f"""
-                <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
-                    <img src='data:image/jpeg;base64,{icon_b64}' 
-                         style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
-                                border: 3px solid #00005A; box-shadow: 0 2px 8px rgba(0,0,90,0.2);
-                                filter: brightness(1.1) contrast(1.1);' />
-                    <div style='flex: 1; color: #333;'>
-                        <div style='color: #00005A; line-height: 1.6;'>{escaped_final_text}</div>
+                # Check if LLM response is a tool call (JSON format)
+                tool_call_executed = False
+                if current_response_text.strip().startswith("{") and "tool" in current_response_text:
+                    try:
+                        # Parse JSON tool call
+                        tool_data = json.loads(current_response_text.strip())
+                        if "tool" in tool_data and "args" in tool_data:
+                            tool_name = tool_data["tool"]
+                            tool_args = tool_data["args"]
+                            
+                            # Show tool execution status
+                            with st.spinner(f"🔧 Ejecutando {tool_name}..."):
+                                tool_result = tools_interface.execute_tool(tool_name, tool_args)
+                            
+                            # Check if tool executed successfully
+                            if "error" not in tool_result:
+                                tool_call_executed = True
+                                st.success(f"✅ {tool_name} ejecutado correctamente")
+                                
+                                # Format the result for the LLM to present
+                                result_text = json.dumps(tool_result, ensure_ascii=False, indent=2)
+                                
+                                # Ask LLM to format the result for the user
+                                messages_for_llm.append({"role": "assistant", "content": current_response_text})
+                                messages_for_llm.append({
+                                    "role": "user", 
+                                    "content": f"Aquí está el resultado de la herramienta:\n\n{result_text}\n\nPor favor, presenta esta información al usuario de forma clara y estructurada en español."
+                                })
+                                
+                                # Get formatted response from LLM
+                                format_payload = {
+                                    "model": VLLM_MODEL_GENERATION,
+                                    "messages": messages_for_llm,
+                                    "temperature": 0.3,
+                                    "stream": False,
+                                    "max_tokens": 800
+                                }
+                                
+                                format_response = requests.post(url, json=format_payload, timeout=30)
+                                format_response.raise_for_status()
+                                format_result = format_response.json()
+                                formatted_text = format_result["choices"][0]["message"]["content"]
+                                
+                                # Display formatted response
+                                escaped_formatted = html.escape(formatted_text)
+                                bot_response_placeholder.markdown(f"""
+                                <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+                                    <img src='data:image/jpeg;base64,{icon_b64}' 
+                                         style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
+                                                border: 3px solid #00005A; box-shadow: 0 2px 8px rgba(0,0,90,0.2);
+                                                filter: brightness(1.1) contrast(1.1);' />
+                                    <div style='flex: 1; color: #333;'>
+                                        <div style='color: #00005A; line-height: 1.6;'>{escaped_formatted}</div>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.session_state.chat_history.append(("assistant", formatted_text))
+                            else:
+                                # Tool execution failed
+                                st.error(f"❌ Error en {tool_name}: {tool_result['error']}")
+                                error_text = f"Lo siento, ocurrió un error al ejecutar la herramienta: {tool_result['error']}"
+                                escaped_error = html.escape(error_text)
+                                bot_response_placeholder.markdown(f"""
+                                <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+                                    <img src='data:image/jpeg;base64,{icon_b64}' 
+                                         style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
+                                                border: 3px solid #00005A; box-shadow: 0 2px 8px rgba(0,0,90,0.2);
+                                                filter: brightness(1.1) contrast(1.1);' />
+                                    <div style='flex: 1; color: #333;'>
+                                        <div style='color: #00005A; line-height: 1.6;'>{escaped_error}</div>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.session_state.chat_history.append(("assistant", error_text))
+                    except json.JSONDecodeError:
+                        # Not a valid JSON tool call, treat as normal response
+                        pass
+                
+                # If no tool was executed, display the normal response
+                if not tool_call_executed:
+                    escaped_final_text = html.escape(current_response_text)
+                    bot_response_placeholder.markdown(f"""
+                    <div style='display: flex; align-items: flex-start; margin-bottom: 16px; padding: 12px; background-color: #f8f9fa; border-radius: 12px; border-left: 4px solid #001EB4;'>
+                        <img src='data:image/jpeg;base64,{icon_b64}' 
+                             style='width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; 
+                                    border: 3px solid #00005A; box-shadow: 0 2px 8px rgba(0,0,90,0.2);
+                                    filter: brightness(1.1) contrast(1.1);' />
+                        <div style='flex: 1; color: #333;'>
+                            <div style='color: #00005A; line-height: 1.6;'>{escaped_final_text}</div>
+                        </div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
-                st.session_state.chat_history.append(("assistant", current_response_text))
+                    """, unsafe_allow_html=True)
+                    st.session_state.chat_history.append(("assistant", current_response_text))
         except Exception as e:
             error_msg = f"Error al generar respuesta con LLM: {e}"
             st.error(error_msg)

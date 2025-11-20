@@ -12,12 +12,6 @@ class IncidentExtraction {
     }
 
     async init() {
-        // Ensure images directory exists
-        const imagesDir = 'images';
-        if (!fs.existsSync(imagesDir)) {
-            fs.mkdirSync(imagesDir, { recursive: true });
-        }
-
         this.browser = await puppeteer.launch({
             headless: true,
             args: [
@@ -35,20 +29,9 @@ class IncidentExtraction {
             password: 'ChatBot2025/*-+'
         });
         await this.page.setViewport({ width: 1920, height: 1080 });
-
-        // Set up error handling
-        this.page.on('error', (error) => {
-            console.error('Page error:', error.message);
-        });
-
-        this.page.on('pageerror', (error) => {
-            console.error('Page error:', error.message);
-        });
     }
 
     async navigateToApplication() {
-        console.log('Navigating to CA Service Desk Manager...');
-
         // Test internal network connection
         try {
             const response = await this.page.goto('http://10.100.85.31', { timeout: 15000 });
@@ -61,14 +44,10 @@ class IncidentExtraction {
             timeout: 60000
         });
 
-        console.log(`Navigation response: ${response.status()} ${response.statusText()}`);
-
         if (response.status() !== 200) {
             throw new Error(`Failed to load application: HTTP ${response.status()}`);
         }
 
-        // Wait for frames to load using a more reliable method
-        console.log('Waiting for frames to load...');
         await this.waitForFramesToLoad();
 
         return response;
@@ -101,7 +80,6 @@ class IncidentExtraction {
                 }
 
                 if (framesLoaded >= frames.length - 1) { // Allow for one frame to potentially fail
-                    console.log(`${framesLoaded} frames loaded successfully`);
                     break;
                 }
             }
@@ -112,8 +90,6 @@ class IncidentExtraction {
     }
 
     async findTargetFrame() {
-        console.log('Searching for target frame...');
-
         const frames = this.page.frames();
         const frame = frames[1];
         this.targetFrame = frame;
@@ -121,8 +97,6 @@ class IncidentExtraction {
     }
 
     async waitForFormReady() {
-        console.log('Waiting for Incident form to be ready...');
-
         if (!this.targetFrame) {
             throw new Error('Target frame not set');
         }
@@ -139,8 +113,6 @@ class IncidentExtraction {
                 visible: true
             });
 
-            console.log('New UI elements are ready');
-
             // Wait for form to be fully loaded
             await this.targetFrame.waitForFunction(() => {
                 const selector = document.querySelector('#ticket_type');
@@ -148,17 +120,14 @@ class IncidentExtraction {
                 return selector && input && document.readyState === 'complete';
             }, { timeout: 15000 });
 
-            console.log('New form is fully ready');
             return;
 
         } catch (e) {
-            console.log('New UI elements not found');
+            // Form not ready
         }
     }
 
     async selectIncidentType() {
-        console.log('Selecting Incident from ticket type dropdown...');
-
         if (!this.targetFrame) {
             throw new Error('Target frame not set');
         }
@@ -169,15 +138,11 @@ class IncidentExtraction {
         // Select "Incident" option (value="go_in")
         await this.targetFrame.select('#ticket_type', 'go_in');
 
-        console.log('Incident selected from dropdown');
-
         // Verify the selection
         const selectedValue = await this.targetFrame.evaluate(() => {
             const select = document.querySelector('#ticket_type');
             return select ? select.value : null;
         });
-
-        console.log(`Verified selected value: ${selectedValue}`);
 
         if (selectedValue !== 'go_in') {
             throw new Error(`Selection failed: expected go_in, got ${selectedValue}`);
@@ -191,8 +156,6 @@ class IncidentExtraction {
             throw new Error('Incident Number is required');
         }
 
-        console.log(`Entering Incident: ${incidentNumber}`);
-
         // Try new UI input field first
         let inputField = await this.targetFrame.$('input[name="searchKey"]');
 
@@ -201,21 +164,15 @@ class IncidentExtraction {
             throw new Error('Incident input field not found');
         }
 
-        console.log(`Using input field selector: ${inputSelector}`);
-
         // Clear and fill the input field
         await inputField.click({ clickCount: 3 }); // Triple click to select all
         await inputField.type(incidentNumber);
-
-        console.log(`Successfully entered Incident Number: ${incidentNumber}`);
 
         // Verify the value was entered correctly
         const enteredValue = await this.targetFrame.evaluate((selector) => {
             const input = document.querySelector(selector);
             return input ? input.value : null;
         }, inputSelector);
-
-        console.log(`Verified entered value: ${enteredValue}`);
 
         if (enteredValue !== incidentNumber) {
             throw new Error(`Value mismatch: expected ${incidentNumber}, got ${enteredValue}`);
@@ -225,8 +182,6 @@ class IncidentExtraction {
     }
 
     async clickGoButton() {
-        console.log('Looking for Go button...');
-
         let goButton = null;
 
         if (!goButton) {
@@ -254,8 +209,6 @@ class IncidentExtraction {
             throw new Error('Go button not found');
         }
 
-        console.log('Clicking Go button...');
-
         // Set up popup window listener before clicking
         const popupPromise = new Promise((resolve) => {
             this.page.once('popup', resolve);
@@ -271,31 +224,23 @@ class IncidentExtraction {
         ]);
 
         if (result && result.type === 'popup') {
-            console.log('Popup window detected');
             this.popupPage = result.popup;
 
             try {
                 await this.popupPage.waitForFunction(() => document.readyState !== 'loading', { timeout: 10000 }).catch(() => { });
-                console.log('Popup page loaded successfully');
             } catch (e) {
-                console.log('Popup loading warning:', e.message);
                 // Continue anyway as the popup might still be usable
             }
         }
 
-        console.log('Go button clicked successfully');
         return true;
     }
 
     async waitForPopupAndExtractData() {
-        console.log('Waiting for popup window to load...');
-
         if (!this.popupPage) {
             throw new Error('Popup page not available');
         }
 
-        // First, let's see what we have in the popup and find the right frame
-        console.log('Debugging popup content...');
         await this.debugPopupContent();
 
         // Try multiple approaches to wait for content
@@ -304,18 +249,12 @@ class IncidentExtraction {
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                console.log(`Attempt ${attempt}: Looking for detail table...`);
-
                 // Wait for the detail table to be present with shorter timeout
                 await this.popupPage.waitForSelector('#dtltbl0', { timeout: 5000 });
-                console.log('Detail table found in popup');
                 tableFound = true;
                 break;
             } catch (e) {
-                console.log(`Attempt ${attempt} failed: ${e.message}`);
-
                 if (attempt < maxAttempts) {
-                    console.log('Waiting 2 seconds before retry...');
                     await new Promise(resolve => setTimeout(resolve, 2000));
 
                     // Check if popup is still alive
@@ -349,7 +288,6 @@ class IncidentExtraction {
 
             // Get all rows
             const rows = table.querySelectorAll('tr');
-            console.log(`Found ${rows.length} rows in table`);
 
             // Process rows in pairs (header row + data row)
             for (let i = 0; i < rows.length; i += 2) {
@@ -455,7 +393,7 @@ class IncidentExtraction {
                 tableData.incident_description = incidentDescription.trim();
             }
         } catch (e) {
-            console.log('Could not extract incident description:', e.message);
+            // Could not extract incident description
         }
 
         // Ensure we only return the fields we need for incidents
@@ -490,17 +428,7 @@ class IncidentExtraction {
     async close() {
         if (this.browser) {
             await this.browser.close();
-            console.log('Browser closed');
         }
-    }
-
-    // Method to keep browser open for manual inspection
-    async keepOpen() {
-        console.log('Browser will remain open for manual inspection...');
-        console.log('Press Ctrl+C to close the browser and exit.');
-
-        // Keep the script running
-        return new Promise(() => { });
     }
 }
 
@@ -509,63 +437,44 @@ class IncidentExtraction {
     const automation = new IncidentExtraction();
 
     try {
-        // Initialize browser and page
         await automation.init();
-
-        // Navigate to the application
-        console.log('🚀 Starting Incident extraction...');
         await automation.navigateToApplication();
-
-        // Find the target frame containing the form
         await automation.findTargetFrame();
-
-        // Wait for form to be ready
         await automation.waitForFormReady();
-
-        // Select Incident from the ticket type dropdown
         await automation.selectIncidentType();
 
-        // Enter the specific incident number
-        const incidentNumber = "12345678"; // Replace with actual incident number
-        await automation.enterIncidentNumber(incidentNumber);
+        const incidentNumber = process.argv[2];
 
-        // Click the Go button to submit the search
+        if (!incidentNumber) {
+            throw new Error('Incident Number is required. Usage: node inc_extraction.js <INC_NUMBER>');
+        }
+
+        await automation.enterIncidentNumber(incidentNumber);
         await automation.clickGoButton();
 
-        // Wait for popup and extract data from the detail table
         let extractedData = null;
         extractedData = await automation.waitForPopupAndExtractData();
 
-        console.log('✅ Incident extraction completed successfully!');
-        console.log(`🔍 Entered Incident: ${incidentNumber}`);
-
         if (extractedData) {
-            if (extractedData.incidentData) {
-                console.log('📊 Incident Data:', JSON.stringify(extractedData.incidentData, null, 2));
-            }
-            // Handle legacy format (if extractedData is just the incident data)
-            if (!extractedData.incidentData) {
-                console.log('📊 Extracted Data:', JSON.stringify(extractedData, null, 2));
+            // Save to JSON file
+            const outputDir = 'output';
+            if (!fs.existsSync(outputDir)) {
+                fs.mkdirSync(outputDir, { recursive: true });
             }
 
-            // Output structured data for GUI consumption (single line JSON)
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const filename = `${outputDir}/incident_${incidentNumber}_${timestamp}.json`;
+
+            fs.writeFileSync(filename, JSON.stringify(extractedData, null, 2), 'utf-8');
+
+            // Output structured data for API consumption (single line JSON)
             console.log(JSON.stringify(extractedData));
         }
 
-        // Close browser
         await automation.close();
 
     } catch (error) {
-        console.error('❌ Incident extraction failed:', error.message);
-        console.error('Stack trace:', error.stack);
-
-        try {
-            await automation.takeScreenshot('error_screenshot_incident.png');
-        } catch (screenshotError) {
-            console.log('Could not take error screenshot:', screenshotError.message);
-        }
-
-        // Close browser even on error
         await automation.close();
+        process.exit(1);
     }
 })();
