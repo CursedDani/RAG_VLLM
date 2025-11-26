@@ -11,8 +11,19 @@ import sys
 import os
 import json
 
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Construct path to automation/pptr relative to this script
+PPTR_DIR = os.path.join(SCRIPT_DIR, 'automation', 'pptr')
+
+# Verify the directory exists
+if not os.path.exists(PPTR_DIR):
+    print(f"WARNING: Puppeteer directory not found at {PPTR_DIR}")
+    print("Please ensure the automation/pptr directory exists relative to api_server.py")
+
 # Add automation directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'automation'))
+sys.path.insert(0, os.path.join(SCRIPT_DIR, 'automation'))
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for cross-origin requests
@@ -430,7 +441,7 @@ def change_order():
         # Run the Puppeteer automation script
         result = subprocess.run(
             ['node', 'final_automation.js', order_id],
-            cwd='/app/automation/pptr',
+            cwd=PPTR_DIR,
             capture_output=True,
             text=True,
             timeout=120  # 2 minutes timeout
@@ -439,21 +450,31 @@ def change_order():
         if result.returncode != 0:
             return jsonify({
                 "error": "Automation failed",
-                "details": result.stderr
+                "returncode": result.returncode,
+                "stderr": result.stderr,
+                "stdout": result.stdout  # Include stdout for debugging
             }), 500
         
         # Parse JSON output from the script
         try:
             data = extract_last_json(result.stdout)
+            if data is None:
+                # No JSON found, return raw output for debugging
+                return jsonify({
+                    "error": "No JSON data found in output",
+                    "raw_stdout": result.stdout,
+                    "raw_stderr": result.stderr
+                }), 500
             return jsonify({
                 "success": True,
                 "data": data
             })
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             return jsonify({
-                "success": True,
-                "output": result.stdout
-            })
+                "error": "Failed to parse JSON",
+                "json_error": str(e),
+                "raw_stdout": result.stdout
+            }), 500
             
     except subprocess.TimeoutExpired:
         return jsonify({
@@ -479,7 +500,7 @@ def incident():
         # Run the Puppeteer automation script
         result = subprocess.run(
             ['node', 'inc_extraction.js', incident_id],
-            cwd='/app/automation/pptr',
+            cwd=PPTR_DIR,
             capture_output=True,
             text=True,
             timeout=120  # 2 minutes timeout
@@ -488,21 +509,30 @@ def incident():
         if result.returncode != 0:
             return jsonify({
                 "error": "Automation failed",
-                "details": result.stderr
+                "returncode": result.returncode,
+                "stderr": result.stderr,
+                "stdout": result.stdout
             }), 500
         
         # Parse JSON output from the script
         try:
             data = extract_last_json(result.stdout)
+            if data is None:
+                return jsonify({
+                    "error": "No JSON data found in output",
+                    "raw_stdout": result.stdout,
+                    "raw_stderr": result.stderr
+                }), 500
             return jsonify({
                 "success": True,
                 "data": data
             })
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             return jsonify({
-                "success": True,
-                "output": result.stdout
-            })
+                "error": "Failed to parse JSON",
+                "json_error": str(e),
+                "raw_stdout": result.stdout
+            }), 500
             
     except subprocess.TimeoutExpired:
         return jsonify({
@@ -528,7 +558,7 @@ def request_ticket():
         # Run the Puppeteer automation script
         result = subprocess.run(
             ['node', 'rq_extraction.js', request_id],
-            cwd='/app/automation/pptr',
+            cwd=PPTR_DIR,
             capture_output=True,
             text=True,
             timeout=120  # 2 minutes timeout
@@ -537,21 +567,30 @@ def request_ticket():
         if result.returncode != 0:
             return jsonify({
                 "error": "Automation failed",
-                "details": result.stderr
+                "returncode": result.returncode,
+                "stderr": result.stderr,
+                "stdout": result.stdout
             }), 500
         
         # Parse JSON output from the script
         try:
             data = extract_last_json(result.stdout)
+            if data is None:
+                return jsonify({
+                    "error": "No JSON data found in output",
+                    "raw_stdout": result.stdout,
+                    "raw_stderr": result.stderr
+                }), 500
             return jsonify({
                 "success": True,
                 "data": data
             })
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             return jsonify({
-                "success": True,
-                "output": result.stdout
-            })
+                "error": "Failed to parse JSON",
+                "json_error": str(e),
+                "raw_stdout": result.stdout
+            }), 500
             
     except subprocess.TimeoutExpired:
         return jsonify({
@@ -565,6 +604,10 @@ def request_ticket():
 if __name__ == '__main__':
     print("=" * 60)
     print("Active Directory Automation API Server")
+    print("=" * 60)
+    print(f"Script Directory: {SCRIPT_DIR}")
+    print(f"Puppeteer Directory: {PPTR_DIR}")
+    print(f"Puppeteer Dir Exists: {os.path.exists(PPTR_DIR)}")
     print("=" * 60)
     print(f"AD Server: {AD_SERVER}")
     print(f"Base DN: {BASE_DN}")

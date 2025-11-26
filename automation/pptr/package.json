@@ -1,6 +1,7 @@
 {
   "name": "automation",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "final_automation.js",
   "scripts": {
@@ -16,7 +17,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "puppeteer": "^24.23.0"
+    "puppeteer": "^24.31.0"
   },
   "devDependencies": {
     "electron": "^38.4.0"

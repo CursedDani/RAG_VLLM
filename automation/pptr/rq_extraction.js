@@ -1,6 +1,12 @@
 import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// Get the directory of the current script
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 class RequestExtraction {
     constructor() {
@@ -447,14 +453,14 @@ class RequestExtraction {
         extractedData = await automation.waitForPopupAndExtractData();
 
         if (extractedData) {
-            // Save to JSON file
-            const outputDir = 'output';
+            // Save to JSON file (relative to script location)
+            const outputDir = path.join(__dirname, 'output');
             if (!fs.existsSync(outputDir)) {
                 fs.mkdirSync(outputDir, { recursive: true });
             }
 
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const filename = `${outputDir}/request_${requestNumber}_${timestamp}.json`;
+            const filename = path.join(outputDir, `request_${requestNumber}_${timestamp}.json`);
 
             fs.writeFileSync(filename, JSON.stringify(extractedData, null, 2), 'utf-8');
 
@@ -465,6 +471,13 @@ class RequestExtraction {
         await automation.close();
 
     } catch (error) {
+        // Always output JSON for API consumption, even on error
+        console.log(JSON.stringify({
+            error: error.message || 'Unknown error',
+            stack: error.stack,
+            requestData: {}
+        }));
+
         await automation.close();
         process.exit(1);
     }

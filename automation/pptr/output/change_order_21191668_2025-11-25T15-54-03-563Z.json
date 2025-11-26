@@ -1,0 +1,41 @@
+{
+  "changeOrderData": {
+    "requester": "Palacio Sepulveda, Jorge Ivan",
+    "affected_end_user": "Palacio Sepulveda, Jorge Ivan",
+    "category": "CYD.Ingreso.DC.MDE.Personas",
+    "status": "Closed Resolved",
+    "order_description": "Nombre de Servicio: Solicitudes Centros de datos y manos remotasNumero de Servicio: 1981973Comentario Inicial:  Informacion de la Solicitud: Datacenter: Datacenter Edificio EPM (B2B) y AMERICA.Tipo de Cliente: usuarioTipo de Solicitud: Acompañamientos Centros de datosDescripcion de Solicitud: Objetivo de Ingreso\tVisita tecnica operativa. \t\t\t\t\t\t\t\t\t\t Instalación visitada\tData Center EPM y AMERICA\t\t\t\t\t\t\t\t\t\tPersonal EAFIT y TigoFecha Inicio: 5/6/202500:00Fecha Fin: 30/6/202523:59Attachments:1749052501686!DUP!_Formato%20Ingreso%20de%20personal%20EAFIT_TIGO_AME_%20EPM%20Junio.xlsx"
+  },
+  "workflowTasks": [
+    {
+      "sequence": "5",
+      "task": "Aval",
+      "description": "Valida la solitud, revisa los adjuntos y firma autorizada. Aprueba o rechaza.Aprobado.",
+      "assignee": "",
+      "group": "Grupo Aval DataCenter",
+      "status": "Complete",
+      "start_date": "06/04/2025 03:55 pm",
+      "completion_date": "06/06/2025 01:24 pm"
+    },
+    {
+      "sequence": "10",
+      "task": "Ejecutar Operaciones",
+      "description": "Estimado UsuarioReciba un cordial saludo de parte de la Gerencia de Seguridad Tigo Nos permitimos comunicarle que su requerimiento ha sido recibido y será tramitado bajo el consecutivo (OC-21191668  ).Cualquier inquietud al respecto o información adicional, no dude en comunicarse a través de nuestra línea gratuita 018000 42 02 40 o del correo electrónico centro.control@tigo.com.co",
+      "assignee": "Centro Control",
+      "group": "",
+      "status": "Complete",
+      "start_date": "06/06/2025 01:24 pm",
+      "completion_date": "06/06/2025 01:35 pm"
+    },
+    {
+      "sequence": "20",
+      "task": "Ejecutar Operaciones",
+      "description": "RESULTADO: La Gerencia de Seguridad TIGO-UNE autoriza el ingreso mediante la OC-21191668 a la(s) siguiente(s) persona(s):Motivo visita: \tVisita operativa. \t\t\t\t\t\t\t\t\t\tDESDE:\tAÑO: \t2025\tMES:\t6\tDIA:\t5\tHASTA:\tAÑO: \t2025\tMES:\t6\tDIA:\t30\tDIAS:\tSÁBADOS:\t\t  DOMINGOS:\t\t   FESTIVOS:\t\tHORAS:\tDESDE\t0:00\t\tHASTA\t23:59\t\tDaniel Felipe Arango Guarin\t1018227831\tEAFIT\tJose Fernando Restrepo Yepes\t71654524\tTIGO",
+      "assignee": "",
+      "group": "Grupo CyD Operadores Med",
+      "status": "Complete",
+      "start_date": "06/06/2025 01:36 pm",
+      "completion_date": "06/06/2025 01:51 pm"
+    }
+  ]
+}

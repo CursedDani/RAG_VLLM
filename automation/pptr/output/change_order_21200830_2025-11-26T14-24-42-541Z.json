@@ -1,0 +1,10 @@
+{
+  "changeOrderData": {
+    "requester": "Palacio Sepulveda, Jorge Ivan",
+    "affected_end_user": "Palacio Sepulveda, Jorge Ivan",
+    "category": "ITO.Ingreso.DC.MDE.Personas",
+    "status": "Closed Resolved",
+    "order_description": "Nombre de Servicio: Solicitudes Centros de datos y manos remotasNumero de Servicio: 1989779Comentario Inicial:  Informacion de la Solicitud: Datacenter: Datacenter la America (ITO)Tipo de Cliente: usuarioTipo de Solicitud: Descripcion de Solicitud: Objetivo de Ingreso\t\tVisita operativa. \tPersonal EAFIT\t\t\t\t\t\t\t Instalación visitada\t\tData Center AMERICA\t\t\t\t\t\t\t\t\t\tdesde 2 al 31 julio 2025Fecha Inicio: 2/7/202500:00Fecha Fin: 31/7/202523:59Attachments:1751465206364!DUP!_Formato%20Ingreso%20de%20personal%20EAFIT_AME_%20Julio.xlsx"
+  },
+  "workflowTasks": []
+}

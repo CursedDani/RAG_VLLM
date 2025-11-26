@@ -1,0 +1,31 @@
+{
+  "changeOrderData": {
+    "requester": "Palacio Sepulveda, Jorge Ivan",
+    "affected_end_user": "Palacio Sepulveda, Jorge Ivan",
+    "category": "ITO.Ingreso.DC.MDE.Personas",
+    "status": "Closed Resolved",
+    "order_description": "Nombre de Servicio: Solicitudes Centros de datos y manos remotasNumero de Servicio: 1989779Comentario Inicial:  Informacion de la Solicitud: Datacenter: Datacenter la America (ITO)Tipo de Cliente: usuarioTipo de Solicitud: Descripcion de Solicitud: Objetivo de Ingreso\t\tVisita operativa. \tPersonal EAFIT\t\t\t\t\t\t\t Instalación visitada\t\tData Center AMERICA\t\t\t\t\t\t\t\t\t\tdesde 2 al 31 julio 2025Fecha Inicio: 2/7/202500:00Fecha Fin: 31/7/202523:59Attachments:1751465206364!DUP!_Formato%20Ingreso%20de%20personal%20EAFIT_AME_%20Julio.xlsx"
+  },
+  "workflowTasks": [
+    {
+      "sequence": "10",
+      "task": "Ejecutar Operaciones",
+      "description": "Estimado UsuarioReciba un cordial saludo de parte de la Dirección de Seguridad Tigo Nos permitimos comunicarle que su requerimiento ha sido recibido y será tramitado bajo el consecutivo (OC - 21200830).Cualquier inquietud al respecto o información adicional, no dude en comunicarse a través de nuestra línea gratuita 018000 42 02 40 o del correo electrónico centro.control@tigo.com.co",
+      "assignee": "Centro Control",
+      "group": "",
+      "status": "Complete",
+      "start_date": "07/02/2025 09:07 am",
+      "completion_date": "07/02/2025 09:31 am"
+    },
+    {
+      "sequence": "20",
+      "task": "Ejecutar Operaciones",
+      "description": "OC: 21200830REVISAR ARCHIVO ADJUNTOingreso del siguiente personal a la sede: AMERICALos permisos van: Desde: 02/07/2025 - 00:00 Hasta: 31/07/2025 - 23:59Empresa: EAFITCliente: TIGO UNETarea o actividad a realizar: Ingresos de personal.",
+      "assignee": "",
+      "group": "Grupo ITO Operadores DataCenter",
+      "status": "Complete",
+      "start_date": "07/02/2025 09:31 am",
+      "completion_date": "07/02/2025 10:11 am"
+    }
+  ]
+}
