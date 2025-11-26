@@ -29,28 +29,18 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for cross-origin requests
 
 # Import and modify full_status functionality
-from ldap3 import Server, Connection, ALL, NTLM
+from ldap3 import Server, Connection, ALL, NTLM, SASL, KERBEROS
 from datetime import datetime, timedelta
 import pytz
 import ssl
-
-# Enable legacy algorithms (MD4) for NTLM authentication
-try:
-    import hashlib
-    hashlib.new('md4')
-except ValueError:
-    os.environ['OPENSSL_CONF'] = '/etc/ssl/openssl.cnf'
-    try:
-        ssl_context = ssl.create_default_context()
-        ssl_context.set_ciphers('DEFAULT:@SECLEVEL=1')
-    except Exception:
-        pass
+import platform
 
 # Configuration
 AD_SERVER = 'net-dc02'
 BASE_DN = 'dc=epmtelco,dc=com,dc=co'
-USER_DOMAIN = 'EPMTELCO\\rinforma'  # Change as needed
-PASSWORD = 'ChatBot2025/*-+'  # Change as needed
+# Kerberos principal (no password needed - uses ticket from kinit)
+AD_USER = 'rinforma@EPMTELCO.COM.CO'
+
 
 def extract_last_json(output):
     """
@@ -114,6 +104,24 @@ def estado_cuenta(uac):
     except Exception:
         return "Desconocido"
 
+# Try Kerberos first, fall back to NTLM if it fails
+def create_ldap_connection():
+    server = Server(AD_SERVER, get_info=ALL, use_ssl=True, 
+                   tls=ssl.create_default_context())
+    if platform.system() == 'Windows':
+        # Windows SSPI Kerberos
+        from ldap3 import SASL, KERBEROS
+        conn = Connection(server, authentication=SASL, 
+                        sasl_mechanism=KERBEROS, auto_bind=True)
+    else:
+        # Linux gssapi Kerberos
+        from ldap3 import SASL, KERBEROS
+        conn = Connection(server, user=AD_USER, 
+                        authentication=SASL, sasl_mechanism=KERBEROS, 
+                        auto_bind=True)
+    return conn
+
+
 def get_user_info(login):
     """Query Active Directory for user information"""
     server = Server(
@@ -125,12 +133,12 @@ def get_user_info(login):
     )
     
     try:
-        # Try NTLM authentication
+        # Use Kerberos/SASL authentication
         conn = Connection(
             server, 
-            user=USER_DOMAIN, 
-            password=PASSWORD, 
-            authentication=NTLM, 
+            user=AD_USER,
+            authentication=SASL, 
+            sasl_mechanism=KERBEROS,
             auto_bind=False,
             read_only=True,
             check_names=False,
@@ -191,11 +199,12 @@ def get_account_status(login):
     )
     
     try:
+        # Use Kerberos/SASL authentication
         conn = Connection(
             server, 
-            user=USER_DOMAIN, 
-            password=PASSWORD, 
-            authentication=NTLM, 
+            user=AD_USER, 
+            authentication=SASL, 
+            sasl_mechanism=KERBEROS,
             auto_bind=False,
             read_only=True,
             check_names=False,
@@ -247,11 +256,12 @@ def get_password_status(login):
     )
     
     try:
+        # Use Kerberos/SASL authentication
         conn = Connection(
             server, 
-            user=USER_DOMAIN, 
-            password=PASSWORD, 
-            authentication=NTLM, 
+            user=AD_USER, 
+            authentication=SASL, 
+            sasl_mechanism=KERBEROS,
             auto_bind=False,
             read_only=True,
             check_names=False,
@@ -611,7 +621,8 @@ if __name__ == '__main__':
     print("=" * 60)
     print(f"AD Server: {AD_SERVER}")
     print(f"Base DN: {BASE_DN}")
-    print(f"User Domain: {USER_DOMAIN}")
+    print(f"AD User (Kerberos): {AD_USER}")
+    print(f"Authentication: SASL/Kerberos")
     print("=" * 60)
     print("Starting Flask server on 0.0.0.0:5000")
     print("=" * 60)
