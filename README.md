@@ -502,6 +502,85 @@ Las credenciales están hardcodeadas en los scripts de Puppeteer:
 
 ⚠️ **Seguridad**: En producción, estas credenciales deberían estar en variables de entorno.
 
+#### Autenticación Cross-Platform (Windows/Linux)
+
+El servidor API (`api_server.py`) usa autenticación **híbrida** con fallback automático:
+
+##### Método Principal: Kerberos (SASL)
+- **Linux**: Usa `gssapi` con tickets Kerberos (`kinit`)
+- **Windows**: Usa SSPI nativo de Windows
+- **Ventaja**: No requiere credenciales en código (usa tickets del sistema)
+
+
+##### Configuración Kerberos (Opcional)
+
+**Linux**:
+```bash
+# Instalar dependencias del sistema
+sudo dnf install krb5-workstation krb5-devel  # Fedora/RHEL
+sudo apt-get install krb5-user libkrb5-dev    # Debian/Ubuntu
+
+# Instalar paquete Python
+pip install gssapi
+
+# Obtener ticket Kerberos
+kinit rinforma@EPMTELCO.COM.CO
+
+# Verificar ticket
+klist
+```
+
+**Windows**:
+```powershell
+# Kerberos SSPI está integrado en Windows
+# No requiere instalación adicional
+
+# El módulo ldap3 usa automáticamente SSPI
+# Solo asegurar que el usuario tenga ticket Kerberos del dominio
+```
+
+##### Configuración Actual
+
+El código detecta automáticamente el sistema operativo:
+
+```python
+def create_ldap_connection():
+    # Intenta Kerberos primero
+    try:
+        if platform.system() == 'Windows':
+            # Windows SSPI Kerberos
+            conn = Connection(server, authentication=SASL, 
+                            sasl_mechanism=KERBEROS, auto_bind=True)
+        else:
+            # Linux gssapi Kerberos
+            conn = Connection(server, user=AD_USER, 
+                            authentication=SASL, sasl_mechanism=KERBEROS, 
+                            auto_bind=True)
+        return conn
+    except Exception:
+        # Fallback a NTLM si Kerberos falla
+        conn = Connection(server, user='EPMTELCO\\rinforma', 
+                         password=AD_PASSWORD, authentication=NTLM, 
+                         auto_bind=True)
+        return conn
+```
+
+##### Estado de Implementación
+
+- ✅ **Código configurado** para Kerberos con fallback NTLM
+- ✅ **Detección automática** de Windows/Linux
+- ⚠️ **Dependencia `gssapi`** no instalada en Linux (fallback activo)
+- ✅ **NTLM funciona** como fallback en ambas plataformas
+
+##### Próximos Pasos (Opcional)
+
+Para habilitar autenticación Kerberos pura:
+1. Instalar dependencias del sistema (`krb5-devel`)
+2. Instalar `gssapi` con `pip install gssapi`
+3. Configurar `/etc/krb5.conf` con realm `EPMTELCO.COM.CO`
+4. Obtener ticket con `kinit rinforma@EPMTELCO.COM.CO`
+5. Remover variables `AD_PASSWORD` del código
+
 #### Limpieza de Logs
 Los scripts de Puppeteer han sido optimizados para:
 - ❌ Sin logs de debug en consola
