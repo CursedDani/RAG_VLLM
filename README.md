@@ -504,82 +504,124 @@ Las credenciales están hardcodeadas en los scripts de Puppeteer:
 
 #### Autenticación Cross-Platform (Windows/Linux)
 
-El servidor API (`api_server.py`) usa autenticación **híbrida** con fallback automático:
+El servidor API (`api_server.py`) usa autenticación **Kerberos únicamente** (sin fallback a NTLM):
 
-##### Método Principal: Kerberos (SASL)
+##### Autenticación Kerberos (SASL)
 - **Linux**: Usa `gssapi` con tickets Kerberos (`kinit`)
 - **Windows**: Usa SSPI nativo de Windows
-- **Ventaja**: No requiere credenciales en código (usa tickets del sistema)
+- **Ventaja**: Autenticación segura sin credenciales hardcodeadas
+- **Requisito**: Ticket Kerberos válido o sesión de dominio activa
 
 
-##### Configuración Kerberos (Opcional)
+##### Instalación en Windows
 
-**Linux**:
+**Instalar dependencias básicas:**
+```powershell
+# Desde el directorio del proyecto
+pip install -r requirements.txt
+```
+
+**✅ Funcionamiento en Windows:**
+- Kerberos SSPI está **integrado en Windows** (no requiere `gssapi` ni `winkerberos`)
+- El código detecta automáticamente Windows y usa SSPI
+- Solo requiere los paquetes en `requirements.txt`
+- **Requisito**: Usuario debe estar autenticado en el dominio Windows
+
+**Ejecutar el servidor API:**
+```powershell
+# Asegúrate de estar autenticado en el dominio EPMTELCO
+python api_server.py
+```
+
+##### Instalación en Linux (Requerida - Kerberos)
+
+**⚠️ IMPORTANTE**: En Linux es **obligatorio** instalar Kerberos:
 ```bash
-# Instalar dependencias del sistema
+# 1. Instalar dependencias del sistema
 sudo dnf install krb5-workstation krb5-devel  # Fedora/RHEL
 sudo apt-get install krb5-user libkrb5-dev    # Debian/Ubuntu
 
-# Instalar paquete Python
+# 2. Instalar paquete Python gssapi
 pip install gssapi
 
-# Obtener ticket Kerberos
+# 3. Obtener ticket Kerberos antes de iniciar el servidor
 kinit rinforma@EPMTELCO.COM.CO
 
-# Verificar ticket
+# 4. Verificar ticket válido
 klist
+
+# 5. Iniciar el servidor API
+python api_server.py
 ```
 
-**Windows**:
-```powershell
-# Kerberos SSPI está integrado en Windows
-# No requiere instalación adicional
-
-# El módulo ldap3 usa automáticamente SSPI
-# Solo asegurar que el usuario tenga ticket Kerberos del dominio
-```
+**⚠️ Sin `gssapi` instalado:**
+- ❌ El servidor **NO iniciará**
+- ❌ Las consultas AD **fallarán**
+- ✅ Instalar `gssapi` es obligatorio en Linux
 
 ##### Configuración Actual
 
-El código detecta automáticamente el sistema operativo:
+El código usa **solo Kerberos** (sin fallback):
 
 ```python
 def create_ldap_connection():
-    # Intenta Kerberos primero
-    try:
-        if platform.system() == 'Windows':
-            # Windows SSPI Kerberos
-            conn = Connection(server, authentication=SASL, 
-                            sasl_mechanism=KERBEROS, auto_bind=True)
-        else:
-            # Linux gssapi Kerberos
-            conn = Connection(server, user=AD_USER, 
-                            authentication=SASL, sasl_mechanism=KERBEROS, 
-                            auto_bind=True)
-        return conn
-    except Exception:
-        # Fallback a NTLM si Kerberos falla
-        conn = Connection(server, user='EPMTELCO\\rinforma', 
-                         password=AD_PASSWORD, authentication=NTLM, 
-                         auto_bind=True)
-        return conn
+    """
+    Kerberos-only authentication (no NTLM fallback)
+    """
+    # Import KERBEROS - raises ImportError if not available
+    from ldap3 import KERBEROS
+    
+    if platform.system() == 'Windows':
+        # Windows SSPI Kerberos (built-in)
+        conn = Connection(server, authentication=SASL, 
+                        sasl_mechanism=KERBEROS, auto_bind=True)
+    else:
+        # Linux gssapi Kerberos (requires gssapi package + kinit)
+        conn = Connection(server, user=AD_USER, 
+                        authentication=SASL, sasl_mechanism=KERBEROS, 
+                        auto_bind=True)
+    return conn
 ```
+
+**Ventajas de solo Kerberos:**
+- 🔒 Mayor seguridad - sin credenciales en código
+- ✅ Autenticación delegada del sistema operativo
+- ✅ Auditoría completa en Active Directory
+- ❌ Sin fallback inseguro a NTLM
 
 ##### Estado de Implementación
 
-- ✅ **Código configurado** para Kerberos con fallback NTLM
-- ✅ **Detección automática** de Windows/Linux
-- ⚠️ **Dependencia `gssapi`** no instalada en Linux (fallback activo)
-- ✅ **NTLM funciona** como fallback en ambas plataformas
+- ✅ **Windows**: Funciona inmediatamente con SSPI (sin paquetes adicionales)
+- ⚠️ **Linux**: Requiere `gssapi` instalado y ticket Kerberos válido
+- ✅ **Detección automática** de sistema operativo
+- ✅ **Importación dinámica** - mensajes de error claros si falta Kerberos
+- ❌ **Sin fallback** - Solo Kerberos, no NTLM
+- 🔒 **Seguridad mejorada** - Sin credenciales hardcodeadas
 
-##### Próximos Pasos (Opcional)
+##### Cómo Funciona la Autenticación
 
-Para habilitar autenticación Kerberos pura:
-1. Instalar dependencias del sistema (`krb5-devel`)
-2. Instalar `gssapi` con `pip install gssapi`
-3. Configurar `/etc/krb5.conf` con realm `EPMTELCO.COM.CO`
-4. Obtener ticket con `kinit rinforma@EPMTELCO.COM.CO`
-5. Remover variables `AD_PASSWORD` del código
+El código autentica usando **solo Kerberos**:
+1. **Windows**: 
+   - Usa SSPI integrado automáticamente
+   - Requiere usuario autenticado en dominio Windows
+   - No necesita `kinit` ni paquetes adicionales
+2. **Linux**:
+   - Usa `gssapi` (debe estar instalado)
+   - Requiere ticket Kerberos válido (`kinit` antes de iniciar)
+   - Falla si no hay ticket o `gssapi` no instalado
+
+##### Mensajes de Log
+
+Al iniciar el servidor verás:
+```
+✓ Authenticated using Kerberos (Windows SSPI)  # En Windows con dominio
+✓ Authenticated using Kerberos (gssapi)        # En Linux con ticket válido
+✗ Kerberos not available: No module named...   # Si falta gssapi (Linux)
+  → On Linux: Install with 'pip install gssapi'
+✗ Kerberos authentication failed: ...          # Si falta ticket o no está en dominio
+  → On Linux: Ensure you have a valid Kerberos ticket (run 'kinit')
+  → On Windows: Ensure you're logged into the domain
+```
 
 #### Limpieza de Logs
 Los scripts de Puppeteer han sido optimizados para:
@@ -629,6 +671,53 @@ Si los scripts toman demasiado tiempo o fallan por timeout:
 - Verificar la velocidad de la conexión VPN
 - Aumentar timeouts en el código si es necesario
 - Verificar que CA Service Desk esté respondiendo
+
+#### Error: "gssapi" not found (Linux)
+```
+ImportError: Kerberos authentication not available. Install required libraries.
+✗ Kerberos not available: No module named 'gssapi'
+```
+**Solución en Linux**: 
+```bash
+# 1. Instalar dependencias del sistema
+sudo dnf install krb5-workstation krb5-devel  # Fedora/RHEL
+sudo apt-get install krb5-user libkrb5-dev    # Debian/Ubuntu
+
+# 2. Instalar gssapi
+pip install gssapi
+
+# 3. Obtener ticket Kerberos
+kinit rinforma@EPMTELCO.COM.CO
+
+# 4. Verificar ticket
+klist
+```
+
+#### Error: "Kerberos authentication failed" (Windows)
+```
+✗ Kerberos authentication failed
+  → On Windows: Ensure you're logged into the domain
+```
+**Solución en Windows**:
+- Asegúrate de estar autenticado en el dominio EPMTELCO
+- Verifica la conectividad con el servidor AD:
+  ```powershell
+  ping net-dc02
+  ```
+- Re-autentica en el dominio si es necesario
+
+#### Error: LDAP Connection Failed
+```
+Error connecting to Active Directory
+```
+**Solución**:
+1. Verificar conectividad VPN a `net-dc02`
+2. Verificar que el servidor AD esté accesible:
+   ```bash
+   ping net-dc02
+   ```
+3. Revisar credenciales en `api_server.py`
+4. Verificar logs del servidor para ver qué método de autenticación falló
 
 ## 👥 Autores
 

@@ -187,6 +187,72 @@ def get_user_info(login):
         
     except Exception as e:
         return {"error": f"Error connecting to Active Directory: {str(e)}"}
+    
+def get_user_info_id(id):
+    """Query Active Directory for user information"""
+    server = Server(
+        AD_SERVER,
+        port=389,
+        get_info=None,
+        connect_timeout=10,
+        use_ssl=False
+    )
+    
+    try:
+        # Use Kerberos/SASL authentication
+        conn = Connection(
+            server, 
+            user=AD_USER,
+            authentication=SASL, 
+            sasl_mechanism=KERBEROS,
+            auto_bind=False,
+            read_only=True,
+            check_names=False,
+            lazy=False,
+            raise_exceptions=True
+        )
+        
+            
+        if not conn.bind():
+            return {"error": "Failed to authenticate with Active Directory"}
+        
+        # Search for user
+        filtro = f"(employeeID={id})"
+        atributos = [
+            'sAMAccountName',
+            'displayName',
+            'employeeID',
+            'userAccountControl',
+            'lastLogonTimestamp',
+            'accountExpires',
+            'msDS-UserPasswordExpiryTimeComputed'
+        ]
+        
+        conn.search(search_base=BASE_DN, search_filter=filtro, attributes=atributos)
+        
+        if not conn.entries:
+            return {"error": f"No user found with login '{id}'"}
+        
+        usuario = conn.entries[0]
+        
+        datos = {
+            "login": usuario.sAMAccountName.value or "No definido",
+            "nombre_completo": usuario.displayName.value or "No definido",
+            "identificacion": usuario.employeeID.value or "No definido",
+            "estado_cuenta": estado_cuenta(usuario.userAccountControl.value),
+            "ultimo_logueo": convertir_filedate_a_fecha(
+                usuario.lastLogonTimestamp.value if 'lastLogonTimestamp' in usuario else None
+            ),
+            "expiracion_cuenta": convertir_filedate_a_fecha(usuario.accountExpires),
+            "expiracion_contrasena": convertir_filedate_a_fecha(
+                usuario['msDS-UserPasswordExpiryTimeComputed'] if 'msDS-UserPasswordExpiryTimeComputed' in usuario else None
+            )
+        }
+        
+        return datos
+        
+    except Exception as e:
+        return {"error": f"Error connecting to Active Directory: {str(e)}"}
 
 def get_account_status(login):
     """Query Active Directory for account status (enabled/disabled, expiration)"""
@@ -316,7 +382,8 @@ def index():
             "/api/pass_status": "GET - Query AD password expiration status (requires 'login' parameter)",
             "/api/change_order": "GET - Extract Change Order information (requires 'order_id' parameter)",
             "/api/incident": "GET - Extract Incident information (requires 'incident_id' parameter)",
-            "/api/request": "GET - Extract Request information (requires 'request_id' parameter)"
+            "/api/request": "GET - Extract Request information (requires 'request_id' parameter)",
+            "/api/full_status_id":"GET - Query AD account status (requires 'id' parameter)"
         },
         "examples": {
             "full_status": "/api/full_status?login=jdoe",
@@ -324,7 +391,8 @@ def index():
             "pass_status": "/api/pass_status?login=jdoe",
             "change_order": "/api/change_order?order_id=CHG000123",
             "incident": "/api/incident?incident_id=INC000123",
-            "request": "/api/request?request_id=RQ000123"
+            "request": "/api/request?request_id=RQ000123",
+            "full_status_id": "/api/full_status_id?id=123456789"
         }
     })
 
@@ -357,6 +425,28 @@ def full_status():
         "success": True,
         "data": result
     })
+
+@app.route('/api/full_status_id', methods=['GET'])
+def full_status_id():
+    """Query Active Directory for user information by ID"""
+    id = request.args.get('id')
+
+    if not id:
+        return jsonify({
+            "error": "Missing 'id' parameter",
+            "usage": "/api/full_status_id?id=123456789"
+        }), 400
+    
+    result = get_user_info_id(id)
+    
+    if "error" in result:
+        return jsonify(result), 500
+    
+    return jsonify({
+        "success": True,
+        "data": result
+    })
+
 
 @app.route('/api/acc_status', methods=['GET'])
 def acc_status():
